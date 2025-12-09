@@ -1,0 +1,137 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
+  ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+
+  # App Names
+  APP_DEV: 'mywebapp-dev-12345'
+  APP_STG: 'mywebapp-staging-12345'
+  APP_PRD: 'mywebapp-prod-12345'
+
+  # Resource Groups
+  RG_NONPROD: 'rg-staging-webapp'
+  RG_PROD: 'rg-prod-webapp'
+
+  # Service Connections
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+stages:
+# ---------------------- CI -------------------------
+- stage: Build_Test
+  displayName: "CI — Build and Test"
+  jobs:
+  - job: BuildJob
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '$(DOTNET_VERSION)'
+
+    - script: dotnet restore DotNetWebApp.sln
+      displayName: Restore
+
+    - script: dotnet build DotNetWebApp.sln --configuration $(BUILD_CONFIGURATION)
+      displayName: Build
+
+    - script: dotnet test tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj --logger "trx"
+      displayName: Test
+
+    - script: dotnet publish $(WEB_PROJECT) -c $(BUILD_CONFIGURATION) -o $(PUBLISH_DIR)
+      displayName: Publish
+
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(PUBLISH_DIR)'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: '$(ARTIFACT_NAME)'
+
+
+# ---------------------- DEV DEPLOY -------------------------
+- stage: Deploy_Dev
+  dependsOn: Build_Test
+  jobs:
+  - deployment: DeployDev
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: $(ARTIFACT_NAME)
+
+          - task: AzureWebApp@1
+            displayName: Deploy to Dev
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_DEV)
+              resourceGroupName: $(RG_NONPROD)
+              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
+
+
+# ---------------------- STAGING DEPLOY -------------------------
+- stage: Deploy_Staging
+  dependsOn: Deploy_Dev
+  jobs:
+  - deployment: DeployStaging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: $(ARTIFACT_NAME)
+
+          - task: AzureWebApp@1
+            displayName: Deploy to Staging
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_STG)
+              resourceGroupName: $(RG_NONPROD)
+              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
+
+
+# ---------------------- PRODUCTION BLUE-GREEN -------------------------
+- stage: Deploy_Prod
+  dependsOn: Deploy_Staging
+  jobs:
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: $(ARTIFACT_NAME)
+
+          # DEPLOY TO PRODUCTION SLOT (BLUE)
+          - task: AzureWebApp@1
+            displayName: Deploy to Production Slot (Blue)
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_PRD)
+              resourceGroupName: $(RG_PROD)
+              slotName: "blue"
+              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
+
+          # SWAP BLUE -> GREEN (go live)
+          - task: AzureAppServiceManage@0
+            displayName: Swap Blue Slot Into Production
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PROD)
+              SourceSlot: blue
+              TargetSlot: production
+
