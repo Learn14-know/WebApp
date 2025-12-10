@@ -16,7 +16,7 @@ variables:
 
   # CI pipeline info
   CI_PROJECT: 'WebApp'                  # Your Azure DevOps project name
-  CI_PIPELINE_NAME: 'CI-Build and Test' # Exact CI pipeline name
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp' # Exact CI pipeline name
   ARTIFACT_NAME: 'drop'
 
 stages:
