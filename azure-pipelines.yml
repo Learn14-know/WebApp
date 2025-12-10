@@ -1,16 +1,6 @@
-trigger:
-- main
-
-pool:
-  vmImage: ubuntu-latest
+trigger: none  # CD pipeline runs manually or triggered via CI artifact
 
 variables:
-  DOTNET_VERSION: '8.0.x'
-  BUILD_CONFIGURATION: 'Release'
-  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
-  ARTIFACT_NAME: 'drop'
-  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
-
   # App Names
   APP_DEV: 'app-RG-DEV'
   APP_STG: 'app-RG-STAGING'
@@ -21,73 +11,107 @@ variables:
   RG_STAGING: 'RG-STAGING'
   RG_PROD: 'RG-PROD-App'
 
-  # Service Connections
+  # Azure service connection
   AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+  # CI pipeline info
+  CI_PROJECT: 'Learn14-know/WebApp'       # Exact project path
+  CI_PIPELINE_NAME: 'CI-Build and Test'   # Exact CI pipeline name
+  ARTIFACT_NAME: 'drop'
 
 stages:
 
-# ---------------------- CI -------------------------
-- stage: Build_Test
-  displayName: "CI — Build and Test"
+# ---------------------- DEV DEPLOY -------------------------
+- stage: Deploy_Dev
+  displayName: "Deploy to Dev"
   jobs:
-  - job: BuildJob
-    displayName: Build Job
-    steps:
+  - deployment: DeployDev
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
+            inputs:
+              project: '$(CI_PROJECT)'
+              pipeline: '$(CI_PIPELINE_NAME)'
+              buildType: 'latest'
+              artifact: '$(ARTIFACT_NAME)'
+              targetPath: '$(Pipeline.Workspace)/drop'
 
-    # ------------------ Use .NET SDK ------------------
-    - task: UseDotNet@2
-      displayName: 'Use .NET SDK'
-      inputs:
-        packageType: 'sdk'
-        version: '$(DOTNET_VERSION)'
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Dev'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              appName: '$(APP_DEV)'
+              resourceGroupName: '$(RG_DEV)'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
-    # ------------------ Restore ------------------
-    - task: DotNetCoreCLI@2
-      displayName: 'Restore NuGet Packages'
-      inputs:
-        command: 'restore'
-        projects: '$(WEB_PROJECT)'
-        feedsToUse: 'select'
+# ---------------------- STAGING DEPLOY -------------------------
+- stage: Deploy_Staging
+  displayName: "Deploy to Staging"
+  dependsOn: Deploy_Dev
+  jobs:
+  - deployment: DeployStaging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
+            inputs:
+              project: '$(CI_PROJECT)'
+              pipeline: '$(CI_PIPELINE_NAME)'
+              buildType: 'latest'
+              artifact: '$(ARTIFACT_NAME)'
+              targetPath: '$(Pipeline.Workspace)/drop'
 
-    # ------------------ Build ------------------
-    - task: DotNetCoreCLI@2
-      displayName: 'Build Solution'
-      inputs:
-        command: 'build'
-        projects: 'DotNetWebApp.sln'
-        arguments: '--configuration $(BUILD_CONFIGURATION)'
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Staging'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              appName: '$(APP_STG)'
+              resourceGroupName: '$(RG_STAGING)'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
-    # ------------------ Test ------------------
-    - task: DotNetCoreCLI@2
-      displayName: 'Run Unit Tests'
-      inputs:
-        command: 'test'
-        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
-        arguments: '--configuration $(BUILD_CONFIGURATION)'
+# ---------------------- PRODUCTION BLUE-GREEN -------------------------
+- stage: Deploy_Prod
+  displayName: "Deploy to Production"
+  dependsOn: Deploy_Staging
+  jobs:
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
+            inputs:
+              project: '$(CI_PROJECT)'
+              pipeline: '$(CI_PIPELINE_NAME)'
+              buildType: 'latest'
+              artifact: '$(ARTIFACT_NAME)'
+              targetPath: '$(Pipeline.Workspace)/drop'
 
-    # ------------------ Publish ------------------
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish Web Project'
-      inputs:
-        command: 'publish'
-        publishWebProjects: true
-        projects: '$(WEB_PROJECT)'
-        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
-        zipAfterPublish: true
+          # Deploy to Production Slot (Blue)
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Production Slot (Blue)'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              appName: '$(APP_PRD)'
+              resourceGroupName: '$(RG_PROD)'
+              slotName: blue
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
-    # ------------------ Archive ------------------
-    - task: ArchiveFiles@2
-      displayName: 'Archive Published Files'
-      inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'
-        includeRootFolder: true
-        archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
-        replaceExistingArchive: true
-
-    # ------------------ Publish Artifact ------------------
-    - task: PublishPipelineArtifact@1
-      displayName: 'Publish Artifact'
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
-        artifact: '$(ARTIFACT_NAME)'
+          # Swap Blue -> Production
+          - task: AzureAppServiceManage@0
+            displayName: 'Swap Blue Slot Into Production'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              WebAppName: '$(APP_PRD)'
+              ResourceGroupName: '$(RG_PROD)'
+              SourceSlot: blue
+              TargetSlot: production
