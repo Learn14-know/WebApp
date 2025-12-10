@@ -1,4 +1,4 @@
-trigger: none  # CD runs manually or via CI trigger
+trigger: none  # CD pipeline runs manually
 
 variables:
   # App Names
@@ -16,8 +16,8 @@ variables:
 
   # CI pipeline info
   CI_PROJECT: 'WebApp'                     # DevOps project name
-  CI_PIPELINE_NAME: 'Learn14-know.WebApp' # CI pipeline name
-  ARTIFACT_NAME: 'drop'                    # Artifact name in CI
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp'  # CI pipeline name
+  ARTIFACT_NAME: 'drop'                     # Artifact name in CI
 
 stages:
 
@@ -36,7 +36,7 @@ stages:
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
@@ -64,16 +64,18 @@ stages:
         deploy:
           steps:
 
+          # Download latest artifact again for staging
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Deploy to Staging
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
             inputs:
@@ -94,10 +96,11 @@ stages:
         deploy:
           steps:
 
+          # Download latest artifact again for production
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
