@@ -8,16 +8,16 @@ variables:
 
   # Resource Groups
   RG_DEV: 'RG-DEV'
-  RG_STAGING: 'RG-STAGING'
+  RG_STG: 'RG-STAGING'
   RG_PRD: 'RG-PROD-App'
 
   # Azure service connection
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'WebApp'                     # DevOps project name
-  CI_PIPELINE_NAME: 'Learn14-know.WebApp'  # CI pipeline name
-  ARTIFACT_NAME: 'drop'                     # Artifact name in CI
+  CI_PROJECT: 'WebApp'
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp'
+  ARTIFACT_NAME: 'drop'
 
 stages:
 
@@ -32,7 +32,7 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI using pipeline name
+          # Download latest CI artifact only once
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
@@ -64,24 +64,13 @@ stages:
         deploy:
           steps:
 
-          # Download artifact again for staging
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download CI Artifact'
-            inputs:
-              source: 'specific'
-              project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
-              artifact: $(ARTIFACT_NAME)
-              targetPath: '$(Pipeline.Workspace)/drop'
-
-          # Deploy to Staging
+          # Reuse artifact downloaded in Dev stage
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
-              resourceGroupName: $(RG_STAGING)
+              resourceGroupName: $(RG_STG)
               package: '$(Pipeline.Workspace)/drop/app.zip'
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
@@ -96,18 +85,7 @@ stages:
         deploy:
           steps:
 
-          # Download artifact again for production
-          - task: DownloadPipelineArtifact@2
-            displayName: 'Download CI Artifact'
-            inputs:
-              source: 'specific'
-              project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
-              artifact: $(ARTIFACT_NAME)
-              targetPath: '$(Pipeline.Workspace)/drop'
-
-          # Deploy to Production Slot (Blue)
+          # Reuse artifact downloaded in Dev stage
           - task: AzureWebApp@1
             displayName: 'Deploy to Production Slot (Blue)'
             inputs:
