@@ -16,7 +16,7 @@ variables:
 
   # CI pipeline info
   CI_PROJECT: 'WebApp'   # Your DevOps project
-  CI_PIPELINE_ID: '389'   # Exact pipeline name
+  CI_PIPELINE_ID: '387'   # Exact pipeline name
   ARTIFACT_NAME: 'drop'                   # Name of the artifact published in CI
 
 stages:
