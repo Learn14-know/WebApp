@@ -1,4 +1,4 @@
-trigger: none   # CD runs manually
+trigger: none   # CD pipeline runs manually
 
 variables:
   # App Names
@@ -32,13 +32,14 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI using pipeline name
+          # Download latest artifact from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'latestFromPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'   # ✅ Latest successful build
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -63,13 +64,14 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact again for staging
+          # Download latest artifact again
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'latestFromPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -94,13 +96,14 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact for production
+          # Download latest artifact again
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'latestFromPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
