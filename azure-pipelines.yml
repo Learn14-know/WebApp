@@ -23,8 +23,8 @@ variables:
   # Service Connections
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
-stages:
 # ---------------------- CI -------------------------
+stages:
 - stage: Build_Test
   displayName: "CI — Build and Test"
   jobs:
@@ -62,6 +62,7 @@ stages:
 
 # ---------------------- DEV DEPLOY -------------------------
 - stage: Deploy_Dev
+  displayName: "Deploy — Development"
   dependsOn: Build_Test
   jobs:
   - deployment: DeployDev
@@ -74,7 +75,7 @@ stages:
             artifact: $(ARTIFACT_NAME)
 
           - task: AzureWebApp@1
-            displayName: Deploy to Dev
+            displayName: "Deploy to Dev"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
@@ -83,6 +84,7 @@ stages:
 
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
+  displayName: "Deploy — Staging"
   dependsOn: Deploy_Dev
   jobs:
   - deployment: DeployStaging
@@ -95,7 +97,7 @@ stages:
             artifact: $(ARTIFACT_NAME)
 
           - task: AzureWebApp@1
-            displayName: Deploy to Staging
+            displayName: "Deploy to Staging"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
@@ -104,10 +106,13 @@ stages:
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
 - stage: Deploy_Prod
+  displayName: "Deploy — Production Blue-Green"
   dependsOn: Deploy_Staging
   jobs:
-  - deployment: DeployProd
-    environment: production  # <-- Set up approvals/checks on this environment
+  # Step 1: Deploy to Blue Slot (requires manual approval)
+  - deployment: DeployBlue
+    displayName: "Deploy to Production Blue Slot"
+    environment: production-blue-slot  # <-- environment with manual approval configured
     strategy:
       runOnce:
         deploy:
@@ -116,7 +121,7 @@ stages:
             artifact: $(ARTIFACT_NAME)
 
           - task: AzureWebApp@1
-            displayName: 'Deploy to Production Slot (Blue)'
+            displayName: "Deploy to Blue Slot"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_PRD)
@@ -124,8 +129,17 @@ stages:
               slotName: "blue"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
+  # Step 2: Swap Blue Slot into Production
+  - deployment: SwapToProd
+    displayName: "Swap Blue Slot Into Production"
+    dependsOn: DeployBlue
+    environment: production  # optional: can also have checks/approvals here
+    strategy:
+      runOnce:
+        deploy:
+          steps:
           - task: AzureAppServiceManage@0
-            displayName: 'Swap Blue Slot Into Production'
+            displayName: "Swap Blue Slot Into Production"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               WebAppName: $(APP_PRD)
