@@ -1,0 +1,27 @@
+trigger:
+  - main
+
+pool: 
+  vmImage: ubuntu- latest
+
+variables:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
+  ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+  
+  APP_DEV: 'mywebapp-dev-12345'
+  APP_STG: 'mywebapp-staging-12345'
+  APP_PRD: 'mywebapp-prod-12345'
+
+  RG_NONPROD: 'rg-staging-webapp'
+  RG_PROD: 'rg-prod-webapp'
+
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+stages:
+  - stage: Build_Test
+    displayName: "CI — Build and Test"
+    jobs:
+    -   job: BuildJob
