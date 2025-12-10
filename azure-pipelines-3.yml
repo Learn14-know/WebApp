@@ -29,40 +29,54 @@ stages:
   displayName: "CI — Build and Test"
   jobs:
   - job: BuildJob
+    displayName: Build Job
     steps:
-   
-    - task: DotNetCoreCLI@2
-      inputs:
-        command: 'restore'
-        projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
-        feedsToUse: 'select'
-        vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
 
-    # Build
-    - task: DotNetCoreCLI@2
-      inputs:
-        command: 'build'
-        projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
-
-    # Test
-    - task: DotNetCoreCLI@2
-      inputs:
-        command: 'test'
-        projects: 'tests/DotNetWebApp.Tests'
-  
-    #
-  
-
--     task: DotNetCoreCLI@2
+      # Restore
+      - task: DotNetCoreCLI@2
+        displayName: Restore
         inputs:
-        command: 'custom'
-        projects: 'DotNetWebApp.sln'
-    custom: 'publish src/DotNetWebApp/DotNetWebApp.csproj -c Release -o $(Build.ArtifactStagingDirectory)/publish'
+          command: 'restore'
+          projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
+          feedsToUse: 'select'
+          vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
 
-    - task: PublishPipelineArtifact@1
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
-        artifact: '$(ARTIFACT_NAME)'
+      # Build
+      - task: DotNetCoreCLI@2
+        displayName: Build
+        inputs:
+          command: 'build'
+          projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
+          arguments: '--configuration $(BUILD_CONFIGURATION)'
 
+      # Test
+      - task: DotNetCoreCLI@2
+        displayName: Test
+        inputs:
+          command: 'test'
+          projects: 'tests/DotNetWebApp.Tests'
+          arguments: '--logger trx'
 
+      # Publish
+      - task: DotNetCoreCLI@2
+        displayName: Publish
+        inputs:
+          command: 'publish'
+          projects: '$(WEB_PROJECT)'
+          arguments: '-c $(BUILD_CONFIGURATION) -o $(PUBLISH_DIR)'
 
+      # Create ZIP package
+      - task: ArchiveFiles@2
+        displayName: "Create ZIP Package"
+        inputs:
+          rootFolderOrFile: '$(PUBLISH_DIR)'
+          includeRootFolder: false
+          archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+          replaceExistingArchive: true
+
+      # Publish artifact
+      - task: PublishPipelineArtifact@1
+        displayName: Publish Artifact
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)'
+          artifact: '$(ARTIFACT_NAME)'
