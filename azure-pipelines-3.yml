@@ -1,0 +1,68 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
+  ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+
+  # App Names
+  APP_DEV: 'mywebapp-dev-12345'
+  APP_STG: 'mywebapp-staging-12345'
+  APP_PRD: 'mywebapp-prod-12345'
+
+  # Resource Groups
+  RG_NONPROD: 'rg-staging-webapp'
+  RG_PROD: 'rg-prod-webapp'
+
+  # Service Connections
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+# ---------------------- CI -------------------------
+stages:
+- stage: Build_Test
+  displayName: "CI — Build and Test"
+  jobs:
+  - job: BuildJob
+    steps:
+   
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: 'restore'
+        projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
+        feedsToUse: 'select'
+        vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
+
+    # Build
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: 'build'
+        projects: 'src/DotNetWebApp/DotNetWebApp.csproj'
+
+    # Test
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: 'test'
+        projects: 'tests/DotNetWebApp.Tests'
+  
+    #
+  
+
+-     task: DotNetCoreCLI@2
+        inputs:
+        command: 'custom'
+        projects: 'DotNetWebApp.sln'
+    custom: 'publish src/DotNetWebApp/DotNetWebApp.csproj -c Release -o $(Build.ArtifactStagingDirectory)/publish'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: '$(ARTIFACT_NAME)'
+
+
+
