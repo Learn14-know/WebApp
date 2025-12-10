@@ -15,10 +15,9 @@ variables:
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'Learn14-know.WebApp'        # Replace with your project name
-  CI_PIPELINE_NAME: 'CI-Build and Test'   # Replace with your CI pipeline name
+  CI_PROJECT: 'Learn14-know.WebApp'  # exact project name
+  CI_PIPELINE_ID: '42'               # replace with your CI pipeline ID
   ARTIFACT_NAME: 'drop'
-  CI_BRANCH: 'refs/heads/main'            # CI branch to pull artifacts from
 
 stages:
 
@@ -32,16 +31,15 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Latest Artifact from CI'
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
             inputs:
               buildType: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
-              branchName: $(CI_BRANCH)
-              artifactName: $(ARTIFACT_NAME)
-              downloadPath: '$(Pipeline.Workspace)/drop'
+              pipeline: $(CI_PIPELINE_ID)
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
+              runVersion: 'latest'  # download latest successful run
 
           - task: AzureWebApp@1
             displayName: 'Deploy to Dev'
@@ -62,16 +60,15 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Latest Artifact from CI'
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
             inputs:
               buildType: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
-              branchName: $(CI_BRANCH)
-              artifactName: $(ARTIFACT_NAME)
-              downloadPath: '$(Pipeline.Workspace)/drop'
+              pipeline: $(CI_PIPELINE_ID)
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
+              runVersion: 'latest'
 
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
@@ -92,16 +89,15 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Latest Artifact from CI'
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download Build Artifact from CI'
             inputs:
               buildType: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
-              branchName: $(CI_BRANCH)
-              artifactName: $(ARTIFACT_NAME)
-              downloadPath: '$(Pipeline.Workspace)/drop'
+              pipeline: $(CI_PIPELINE_ID)
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
+              runVersion: 'latest'
 
           # Deploy to Production Slot (Blue)
           - task: AzureWebApp@1
