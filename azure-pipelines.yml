@@ -16,7 +16,7 @@ variables:
 
   # CI pipeline info
   CI_PROJECT: 'Learn14-know/WebApp'       # Project where CI pipeline runs
-  CI_PIPELINE_NAME: 'CI-Build and Test'   # CI pipeline name
+  CI_PIPELINE_NAME: 'azure-pipelines.yml'   # CI pipeline name
   ARTIFACT_NAME: 'drop'
 
 stages:
