@@ -16,7 +16,7 @@ variables:
 
   # CI pipeline info
   CI_PROJECT: 'Learn14-know.WebApp'  # exact project name
-  CI_PIPELINE_ID: '42'               # replace with your CI pipeline ID
+  CI_PIPELINE_ID: '381'               # replace with your CI pipeline ID
   ARTIFACT_NAME: 'drop'
 
 stages:
