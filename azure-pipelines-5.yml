@@ -8,7 +8,7 @@ variables:
 
   # Resource Groups
   RG_DEV: 'RG-DEV'
-  RG_STG: 'RG-STAGING'
+  RG_STAGING: 'RG-STAGING'
   RG_PRD: 'RG-PROD-App'
 
   # Azure service connection
@@ -32,14 +32,13 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI
+          # Download latest artifact from CI using pipeline name
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'latestFromPipeline'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'  # <- latest successful build
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -64,22 +63,23 @@ stages:
         deploy:
           steps:
 
+          # Download latest artifact again for staging
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'latestFromPipeline'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Deploy to Staging
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
-              resourceGroupName: $(RG_STG)
+              resourceGroupName: $(RG_STAGING)
               package: '$(Pipeline.Workspace)/drop/app.zip'
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
@@ -94,13 +94,13 @@ stages:
         deploy:
           steps:
 
+          # Download latest artifact for production
           - task: DownloadPipelineArtifact@2
             displayName: 'Download CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'latestFromPipeline'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
-              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
