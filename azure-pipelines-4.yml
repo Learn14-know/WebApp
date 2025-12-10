@@ -1,7 +1,25 @@
+trigger: none   # CD pipeline typically runs manually or via CI artifact
 
+
+variables:
+  # App Names
+  APP_DEV: 'app-RG-DEV'
+  APP_STG: 'app-RG-STAGING'
+  APP_PRD: 'app-RG-PROD-App'
+
+  # Resource Groups
+  RG_DEV: 'RG-DEV'
+  RG_STAGING: 'RG-STAGING'
+  RG_PROD: 'RG-PROD-App'
+
+  # Azure service connection
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+stages:
+
+# ---------------------- DEV DEPLOY -------------------------
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
-  dependsOn: Build_Test
   jobs:
   - deployment: DeployDev
     environment: dev
@@ -78,4 +96,3 @@
               ResourceGroupName: $(RG_PROD)
               SourceSlot: blue
               TargetSlot: production
-
