@@ -1,10 +1,11 @@
-trigger:
-- main
+trigger: 
+  - main
 
 pool:
   vmImage: ubuntu-latest
 
 variables:
+
   DOTNET_VERSION: '8.0.x'
   BUILD_CONFIGURATION: 'Release'
   PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
@@ -23,126 +24,34 @@ variables:
   # Service Connections
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
-# ---------------------- CI -------------------------
-stages:
-- stage: Build_Test
+  stages:
+  - stage: Build_Test
   displayName: "CI — Build and Test"
   jobs:
   - job: BuildJob
     steps:
     - task: UseDotNet@2
+      displayName: 'Use .NET SDK'
       inputs:
         packageType: 'sdk'
         version: '$(DOTNET_VERSION)'
 
-    - script: dotnet restore DotNetWebApp.sln
-      displayName: Restore
+        -task: DotNetCoreCLI@2
+          inputs:
+            command: 'restore'
+                projects: 'src/DotNetWebApp'
+                feedsToUse: 'select'
+                vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'build'
+    projects: 'src/DotNetWebApp'
+    arguments: 'DotNetWebApp.sln'
 
-    - script: dotnet build DotNetWebApp.sln --configuration $(BUILD_CONFIGURATION)
-      displayName: Build
 
-    - script: dotnet test tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj --logger "trx"
-      displayName: Test
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'test'
+    projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
 
-    - script: dotnet publish $(WEB_PROJECT) -c $(BUILD_CONFIGURATION) -o $(PUBLISH_DIR)
-      displayName: Publish
-
-    - task: ArchiveFiles@2
-      displayName: 'Create ZIP Package'
-      inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'
-        includeRootFolder: false
-        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
-        replaceExistingArchive: true
-
-    - task: PublishPipelineArtifact@1
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
-        artifact: '$(ARTIFACT_NAME)'
-
-# ---------------------- DEV DEPLOY -------------------------
-- stage: Deploy_Dev
-  displayName: "Deploy — Development"
-  dependsOn: Build_Test
-  jobs:
-  - deployment: DeployDev
-    environment: dev
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: $(ARTIFACT_NAME)
-
-          - task: AzureWebApp@1
-            displayName: "Deploy to Dev"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_DEV)
-              resourceGroupName: $(RG_NONPROD)
-              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-# ---------------------- STAGING DEPLOY -------------------------
-- stage: Deploy_Staging
-  displayName: "Deploy — Staging"
-  dependsOn: Deploy_Dev
-  jobs:
-  - deployment: DeployStaging
-    environment: staging
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: $(ARTIFACT_NAME)
-
-          - task: AzureWebApp@1
-            displayName: "Deploy to Staging"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_STG)
-              resourceGroupName: $(RG_NONPROD)
-              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-# ---------------------- PRODUCTION BLUE-GREEN -------------------------
-- stage: Deploy_Prod
-  displayName: "Deploy — Production Blue-Green"
-  dependsOn: Deploy_Staging
-  jobs:
-  # Step 1: Deploy to Blue Slot (requires manual approval)
-  - deployment: DeployBlue
-    displayName: "Deploy to Production Blue Slot"
-    environment: production-blue-slot  # <-- environment with manual approval configured
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: $(ARTIFACT_NAME)
-
-          - task: AzureWebApp@1
-            displayName: "Deploy to Blue Slot"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_PRD)
-              resourceGroupName: $(RG_PROD)
-              slotName: "blue"
-              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-  # Step 2: Swap Blue Slot into Production
-  - deployment: SwapToProd
-    displayName: "Swap Blue Slot Into Production"
-    dependsOn: DeployBlue
-    environment: production  # optional: can also have checks/approvals here
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: AzureAppServiceManage@0
-            displayName: "Swap Blue Slot Into Production"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              WebAppName: $(APP_PRD)
-              ResourceGroupName: $(RG_PROD)
-              SourceSlot: blue
-              TargetSlot: production
+    
