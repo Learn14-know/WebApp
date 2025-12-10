@@ -48,15 +48,17 @@ stages:
       displayName: Publish
 
     - task: ArchiveFiles@2
+      displayName: 'Create ZIP Package'
       inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'
+        rootFolderOrFile: '$(PUBLISH_DIR)'    # Correct: folder path
+        includeRootFolder: false               # Include contents, not folder itself
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+        replaceExistingArchive: true
 
     - task: PublishPipelineArtifact@1
       inputs:
         targetPath: '$(Build.ArtifactStagingDirectory)'
         artifact: '$(ARTIFACT_NAME)'
-
 
 # ---------------------- DEV DEPLOY -------------------------
 - stage: Deploy_Dev
@@ -79,7 +81,6 @@ stages:
               resourceGroupName: $(RG_NONPROD)
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
   dependsOn: Deploy_Dev
@@ -100,7 +101,6 @@ stages:
               appName: $(APP_STG)
               resourceGroupName: $(RG_NONPROD)
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
 - stage: Deploy_Prod
@@ -134,4 +134,3 @@ stages:
               ResourceGroupName: $(RG_PROD)
               SourceSlot: blue
               TargetSlot: production
-
