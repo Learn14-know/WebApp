@@ -15,8 +15,8 @@ variables:
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'WebApp'             # <-- Azure DevOps project name
-  CI_PIPELINE_NAME: 'CI-Build'     # <-- CI pipeline name
+  CI_PROJECT: 'Learn14-know/WebApp'  # DevOps project name
+  CI_PIPELINE_ID: 381                 # <-- Replace with your CI pipeline ID
   ARTIFACT_NAME: 'drop'
 
 stages:
@@ -34,9 +34,9 @@ stages:
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
-              buildType: 'latest'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
+              pipeline: $(CI_PIPELINE_ID)
+              runVersion: latest
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -62,9 +62,9 @@ stages:
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
-              buildType: 'latest'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
+              pipeline: $(CI_PIPELINE_ID)
+              runVersion: latest
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -90,9 +90,9 @@ stages:
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
-              buildType: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_NAME)
+              pipeline: $(CI_PIPELINE_ID)
+              runVersion: latest
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
