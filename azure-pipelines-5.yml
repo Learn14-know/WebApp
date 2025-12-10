@@ -57,12 +57,13 @@ stages:
       displayName: 'Create app.zip'
       inputs:
         rootFolderOrFile: '$(PUBLISH_DIR)'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+        archiveFile: '$(PUBLISH_DIR)/app.zip'   # zip inside the publish folder
         includeRootFolder: false
         replaceExistingArchive: true
 
+    # ✅ Publish the folder containing app.zip, not just the file
     - task: PublishPipelineArtifact@1
-      displayName: 'Publish Artifact'
+      displayName: 'Publish Artifact drop'
       inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)/app.zip'
-        artifact: '$(ARTIFACT_NAME)'
+        targetPath: '$(PUBLISH_DIR)'   # folder, not a single file
+        artifact: 'drop'
