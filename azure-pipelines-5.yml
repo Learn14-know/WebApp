@@ -1,0 +1,68 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
+  ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+
+stages:
+- stage: Build_Test
+  displayName: "CI — Build and Test"
+  jobs:
+  - job: BuildJob
+    displayName: Build Job
+    steps:
+
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '$(DOTNET_VERSION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        command: 'restore'
+        projects: 'DotNetWebApp.sln'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Solution'
+      inputs:
+        command: 'build'
+        projects: 'DotNetWebApp.sln'
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Unit Tests'
+      inputs:
+        command: 'test'
+        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
+        arguments: '--logger trx --configuration $(BUILD_CONFIGURATION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Web Project'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(WEB_PROJECT)'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
+        zipAfterPublish: false
+
+    - task: ArchiveFiles@2
+      displayName: 'Create app.zip'
+      inputs:
+        rootFolderOrFile: '$(PUBLISH_DIR)'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+        includeRootFolder: false
+        replaceExistingArchive: true
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/app.zip'
+        artifact: '$(ARTIFACT_NAME)'
