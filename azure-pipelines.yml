@@ -1,11 +1,10 @@
-trigger: 
-  - main
+trigger:
+- main
 
 pool:
   vmImage: ubuntu-latest
 
 variables:
-
   DOTNET_VERSION: '8.0.x'
   BUILD_CONFIGURATION: 'Release'
   PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
@@ -13,45 +12,82 @@ variables:
   WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
 
   # App Names
-  APP_DEV: 'mywebapp-dev-12345'
-  APP_STG: 'mywebapp-staging-12345'
-  APP_PRD: 'mywebapp-prod-12345'
+  APP_DEV: 'app-RG-DEV'
+  APP_STG: 'app-RG-STAGING'
+  APP_PRD: 'app-RG-PROD-App'
 
   # Resource Groups
-  RG_NONPROD: 'rg-staging-webapp'
-  RG_PROD: 'rg-prod-webapp'
+  RG_DEV: 'RG-DEV'
+  RG_STAGING: 'RG-STAGING'
+  RG_PROD: 'RG-PROD-App'
 
   # Service Connections
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
-  stages:
-  - stage: Build_Test
+stages:
+
+# ---------------------- CI -------------------------
+- stage: Build_Test
   displayName: "CI — Build and Test"
   jobs:
   - job: BuildJob
+    displayName: Build Job
     steps:
+
+    # ------------------ Use .NET SDK ------------------
     - task: UseDotNet@2
       displayName: 'Use .NET SDK'
       inputs:
         packageType: 'sdk'
         version: '$(DOTNET_VERSION)'
 
-        -task: DotNetCoreCLI@2
-          inputs:
-            command: 'restore'
-                projects: 'src/DotNetWebApp'
-                feedsToUse: 'select'
-                vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
-- task: DotNetCoreCLI@2
-  inputs:
-    command: 'build'
-    projects: 'src/DotNetWebApp'
-    arguments: 'DotNetWebApp.sln'
+    # ------------------ Restore ------------------
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        command: 'restore'
+        projects: '$(WEB_PROJECT)'
+        feedsToUse: 'select'
 
+    # ------------------ Build ------------------
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Solution'
+      inputs:
+        command: 'build'
+        projects: 'DotNetWebApp.sln'
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
 
-- task: DotNetCoreCLI@2
-  inputs:
-    command: 'test'
-    projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
+    # ------------------ Test ------------------
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Unit Tests'
+      inputs:
+        command: 'test'
+        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
 
-    
+    # ------------------ Publish ------------------
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Web Project'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        projects: '$(WEB_PROJECT)'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
+        zipAfterPublish: true
+
+    # ------------------ Archive ------------------
+    - task: ArchiveFiles@2
+      displayName: 'Archive Published Files'
+      inputs:
+        rootFolderOrFile: '$(PUBLISH_DIR)'
+        includeRootFolder: true
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+        replaceExistingArchive: true
+
+    # ------------------ Publish Artifact ------------------
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: '$(ARTIFACT_NAME)'
