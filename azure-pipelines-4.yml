@@ -1,0 +1,81 @@
+
+- stage: Deploy_Dev
+  displayName: "Deploy to Dev"
+  dependsOn: Build_Test
+  jobs:
+  - deployment: DeployDev
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+            displayName: 'Download Build Artifact'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Dev'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_DEV)
+              resourceGroupName: $(RG_DEV)
+              package: '$(Pipeline.Workspace)/drop/app.zip'
+
+# ---------------------- STAGING DEPLOY -------------------------
+- stage: Deploy_Staging
+  displayName: "Deploy to Staging"
+  dependsOn: Deploy_Dev
+  jobs:
+  - deployment: DeployStaging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+            displayName: 'Download Build Artifact'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Staging'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_STG)
+              resourceGroupName: $(RG_STAGING)
+              package: '$(Pipeline.Workspace)/drop/app.zip'
+
+# ---------------------- PRODUCTION BLUE-GREEN -------------------------
+- stage: Deploy_Prod
+  displayName: "Deploy to Production"
+  dependsOn: Deploy_Staging
+  jobs:
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+            displayName: 'Download Build Artifact'
+
+          # Deploy to Production Slot (Blue)
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Production Slot (Blue)'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_PRD)
+              resourceGroupName: $(RG_PROD)
+              slotName: blue
+              package: '$(Pipeline.Workspace)/drop/app.zip'
+
+          # Swap Blue -> Production
+          - task: AzureAppServiceManage@0
+            displayName: 'Swap Blue Slot Into Production'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PROD)
+              SourceSlot: blue
+              TargetSlot: production
+
