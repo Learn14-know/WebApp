@@ -26,57 +26,42 @@ variables:
 stages:
 # ---------------------- CI -------------------------
 - stage: Build_Test
-  displayName: "CI — Build, Test, and Publish"
+  displayName: "CI — Build and Test"
   jobs:
   - job: BuildJob
-    displayName: Build & Test
     steps:
     - task: UseDotNet@2
-      displayName: "Use .NET SDK $(DOTNET_VERSION)"
       inputs:
         packageType: 'sdk'
         version: '$(DOTNET_VERSION)'
 
     - script: dotnet restore DotNetWebApp.sln
-      displayName: 'Restore'
+      displayName: Restore
 
     - script: dotnet build DotNetWebApp.sln --configuration $(BUILD_CONFIGURATION)
-      displayName: 'Build'
+      displayName: Build
 
     - script: dotnet test tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj --logger "trx"
-      displayName: 'Test'
+      displayName: Test
 
-    # Publish to folder
     - script: dotnet publish $(WEB_PROJECT) -c $(BUILD_CONFIGURATION) -o $(PUBLISH_DIR)
-      displayName: 'Publish .NET Web App'
+      displayName: Publish
 
-    # Zip with correct structure
+    # Correct ZIP structure for Linux App Service
     - task: ArchiveFiles@2
       displayName: 'Create ZIP Package'
       inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'
-        includeRootFolder: false    # important!
-        archiveType: 'zip'
+        rootFolderOrFile: '$(PUBLISH_DIR)/*'   # zip contents, not folder
+        includeRootFolder: false
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
-        replaceExistingArchive: true
-
-    # Inspect files (optional, helps debugging)
-    - script: |
-        echo "Listing contents of publish folder:"
-        ls -R $(PUBLISH_DIR)
-        echo "Listing contents of app.zip:"
-        unzip -l $(Build.ArtifactStagingDirectory)/app.zip
-      displayName: "Inspect publish folder and ZIP"
 
     - task: PublishPipelineArtifact@1
-      displayName: 'Publish Pipeline Artifact'
       inputs:
         targetPath: '$(Build.ArtifactStagingDirectory)'
         artifact: '$(ARTIFACT_NAME)'
 
 # ---------------------- DEV DEPLOY -------------------------
 - stage: Deploy_Dev
-  displayName: "CD — Deploy to Dev"
   dependsOn: Build_Test
   jobs:
   - deployment: DeployDev
@@ -89,7 +74,7 @@ stages:
             artifact: $(ARTIFACT_NAME)
 
           - task: AzureWebApp@1
-            displayName: "Deploy to Dev"
+            displayName: Deploy to Dev
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
@@ -98,7 +83,6 @@ stages:
 
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
-  displayName: "CD — Deploy to Staging"
   dependsOn: Deploy_Dev
   jobs:
   - deployment: DeployStaging
@@ -111,7 +95,7 @@ stages:
             artifact: $(ARTIFACT_NAME)
 
           - task: AzureWebApp@1
-            displayName: "Deploy to Staging"
+            displayName: Deploy to Staging
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
@@ -120,7 +104,6 @@ stages:
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
 - stage: Deploy_Prod
-  displayName: "CD — Deploy to Production (Blue-Green)"
   dependsOn: Deploy_Staging
   jobs:
   - deployment: DeployProd
@@ -134,7 +117,7 @@ stages:
 
           # DEPLOY TO PRODUCTION SLOT (BLUE)
           - task: AzureWebApp@1
-            displayName: "Deploy to Production Slot (Blue)"
+            displayName: Deploy to Production Slot (Blue)
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_PRD)
@@ -144,7 +127,7 @@ stages:
 
           # SWAP BLUE -> PRODUCTION
           - task: AzureAppServiceManage@0
-            displayName: "Swap Blue Slot Into Production"
+            displayName: Swap Blue Slot Into Production
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               WebAppName: $(APP_PRD)
