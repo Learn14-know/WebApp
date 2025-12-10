@@ -14,16 +14,16 @@ variables:
   # Resource Groups
   RG_DEV: 'RG-DEV'
   RG_STAGING: 'RG-STAGING'
-  RG_PROD: 'RG-PROD-App'
+  RG_PROD: 'RG-PRD-App'
 
   # Azure service connection
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
 stages:
 
-# -----------------------------------------------------------
+# -------------------------------
 # DEV DEPLOYMENT
-# -----------------------------------------------------------
+# -------------------------------
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   jobs:
@@ -50,9 +50,9 @@ stages:
               resourceGroupName: $(RG_DEV)
               package: "$(Pipeline.Workspace)/drop/app.zip"
 
-# -----------------------------------------------------------
+# -------------------------------
 # STAGING DEPLOYMENT
-# -----------------------------------------------------------
+# -------------------------------
 - stage: Deploy_Staging
   displayName: "Deploy to Staging"
   dependsOn: Deploy_Dev
@@ -80,9 +80,9 @@ stages:
               resourceGroupName: $(RG_STAGING)
               package: "$(Pipeline.Workspace)/drop/app.zip"
 
-# -----------------------------------------------------------
+# -------------------------------
 # PRODUCTION BLUE-GREEN DEPLOYMENT
-# -----------------------------------------------------------
+# -------------------------------
 - stage: Deploy_Prod
   displayName: "Deploy to Production"
   dependsOn: Deploy_Staging
@@ -93,7 +93,6 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - task: DownloadPipelineArtifact@2
             displayName: "Download CI Artifact"
             inputs:
