@@ -1,69 +1,128 @@
-trigger:
-- main
-
-pool:
-  vmImage: ubuntu-latest
+trigger: none   # CD pipeline runs manually
 
 variables:
-  DOTNET_VERSION: '8.0.x'
-  BUILD_CONFIGURATION: 'Release'
-  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
-  ARTIFACT_NAME: 'drop'
-  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+  # App Names
+  APP_DEV: 'app-RG-DEV'
+  APP_STG: 'app-RG-STAGING'
+  APP_PRD: 'app-RG-PROD-App'
+
+  # Resource Groups
+  RG_DEV: 'RG-DEV'
+  RG_STAGING: 'RG-STAGING'
+  RG_PRD: 'RG-PROD-App'
+
+  # Azure service connection
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+  # CI pipeline info
+  CI_PROJECT: 'WebApp'                     # DevOps project name
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp'  # CI pipeline name
+  ARTIFACT_NAME: 'drop'                     # Artifact name in CI
 
 stages:
-- stage: Build_Test
-  displayName: "CI — Build and Test"
+
+# ---------------------- DEV DEPLOY -------------------------
+- stage: Deploy_Dev
+  displayName: "Deploy to Dev"
   jobs:
-  - job: BuildJob
-    displayName: Build Job
-    steps:
+  - deployment: DeployDev
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
 
-    - task: UseDotNet@2
-      inputs:
-        packageType: 'sdk'
-        version: '$(DOTNET_VERSION)'
+          # Download latest artifact from CI using pipeline name
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download CI Artifact'
+            inputs:
+              source: 'specific'
+              project: $(CI_PROJECT)
+              pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Restore NuGet Packages'
-      inputs:
-        command: 'restore'
-        projects: 'DotNetWebApp.sln'
+          # Deploy to Dev
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Dev'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_DEV)
+              resourceGroupName: $(RG_DEV)
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Build Solution'
-      inputs:
-        command: 'build'
-        projects: 'DotNetWebApp.sln'
-        arguments: '--configuration $(BUILD_CONFIGURATION)'
+# ---------------------- STAGING DEPLOY -------------------------
+- stage: Deploy_Staging
+  displayName: "Deploy to Staging"
+  dependsOn: Deploy_Dev
+  jobs:
+  - deployment: DeployStaging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Run Unit Tests'
-      inputs:
-        command: 'test'
-        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
-        arguments: '--logger trx --configuration $(BUILD_CONFIGURATION)'
+          # Download artifact again for staging
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download CI Artifact'
+            inputs:
+              source: 'specific'
+              project: $(CI_PROJECT)
+              pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish Web Project'
-      inputs:
-        command: 'publish'
-        publishWebProjects: false
-        projects: '$(WEB_PROJECT)'
-        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
-        zipAfterPublish: false
+          # Deploy to Staging
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Staging'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_STG)
+              resourceGroupName: $(RG_STAGING)
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
-    - task: ArchiveFiles@2
-      displayName: 'Create app.zip'
-      inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'
-        archiveFile: '$(PUBLISH_DIR)/app.zip'   # zip inside the publish folder
-        includeRootFolder: false
-        replaceExistingArchive: true
+# ---------------------- PRODUCTION BLUE-GREEN -------------------------
+- stage: Deploy_Prod
+  displayName: "Deploy to Production"
+  dependsOn: Deploy_Staging
+  jobs:
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
 
-    # ✅ Publish the folder containing app.zip, not just the file
-    - task: PublishPipelineArtifact@1
-      displayName: 'Publish Artifact drop'
-      inputs:
-        targetPath: '$(PUBLISH_DIR)'   # folder, not a single file
-        artifact: 'drop'
+          # Download artifact again for production
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download CI Artifact'
+            inputs:
+              source: 'specific'
+              project: $(CI_PROJECT)
+              pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              targetPath: '$(Pipeline.Workspace)/drop'
+
+          # Deploy to Production Slot (Blue)
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Production Slot (Blue)'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_PRD)
+              resourceGroupName: $(RG_PRD)
+              slotName: blue
+              package: '$(Pipeline.Workspace)/drop/app.zip'
+
+          # Swap Blue -> Production
+          - task: AzureAppServiceManage@0
+            displayName: 'Swap Blue Slot Into Production'
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PRD)
+              SourceSlot: blue
+              TargetSlot: production
