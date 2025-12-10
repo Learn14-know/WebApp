@@ -15,9 +15,9 @@ variables:
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'Learn14-know/WebApp'  # DevOps project name
-  CI_PIPELINE_ID: 389                 # <-- Replace with your CI pipeline ID
-  ARTIFACT_NAME: 'drop'
+  CI_PROJECT: 'NCPLprojectAzure/WebApp'   # Your DevOps project
+  CI_PIPELINE_ID: '389'   # Exact pipeline name
+  ARTIFACT_NAME: 'drop'                   # Name of the artifact published in CI
 
 stages:
 
@@ -31,15 +31,19 @@ stages:
       runOnce:
         deploy:
           steps:
+
+          # Download latest artifact from CI
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_ID)
-              runVersion: latest
+              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Deploy to Dev
           - task: AzureWebApp@1
             displayName: 'Deploy to Dev'
             inputs:
@@ -59,12 +63,14 @@ stages:
       runOnce:
         deploy:
           steps:
+
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
+              source: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
-              runVersion: latest
+              pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
@@ -87,12 +93,14 @@ stages:
       runOnce:
         deploy:
           steps:
+
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Build Artifact from CI'
             inputs:
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_ID)
-              runVersion: latest
+              buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
