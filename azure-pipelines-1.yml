@@ -47,11 +47,11 @@ stages:
     - script: dotnet publish $(WEB_PROJECT) -c $(BUILD_CONFIGURATION) -o $(PUBLISH_DIR)
       displayName: Publish
 
-    # Correct ZIP structure for Linux App Service
+    # ---------------- ZIP FIX ----------------
     - task: ArchiveFiles@2
       displayName: 'Create ZIP Package'
       inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)/*'   # zip contents, not folder
+        rootFolderOrFile: '$(PUBLISH_DIR)/*'  # <- include files inside publish, not the folder
         includeRootFolder: false
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
 
@@ -125,7 +125,7 @@ stages:
               slotName: "blue"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-          # SWAP BLUE -> PRODUCTION
+          # SWAP BLUE -> GREEN (go live)
           - task: AzureAppServiceManage@0
             displayName: Swap Blue Slot Into Production
             inputs:
