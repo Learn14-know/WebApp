@@ -50,8 +50,8 @@ stages:
     - task: ArchiveFiles@2
       displayName: 'Create ZIP Package'
       inputs:
-        rootFolderOrFile: '$(PUBLISH_DIR)'    # Correct: folder path
-        includeRootFolder: false               # Include contents, not folder itself
+        rootFolderOrFile: '$(PUBLISH_DIR)'
+        includeRootFolder: false
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
         replaceExistingArchive: true
 
@@ -107,7 +107,7 @@ stages:
   dependsOn: Deploy_Staging
   jobs:
   - deployment: DeployProd
-    environment: production
+    environment: production  # <-- Set up approvals/checks on this environment
     strategy:
       runOnce:
         deploy:
@@ -115,9 +115,8 @@ stages:
           - download: current
             artifact: $(ARTIFACT_NAME)
 
-          # DEPLOY TO PRODUCTION SLOT (BLUE)
           - task: AzureWebApp@1
-            displayName: Deploy to Production Slot (Blue)
+            displayName: 'Deploy to Production Slot (Blue)'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_PRD)
@@ -125,9 +124,8 @@ stages:
               slotName: "blue"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-          # SWAP BLUE -> GREEN (go live)
           - task: AzureAppServiceManage@0
-            displayName: Swap Blue Slot Into Production
+            displayName: 'Swap Blue Slot Into Production'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               WebAppName: $(APP_PRD)
