@@ -62,6 +62,6 @@ stages:
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Artifact'
       inputs:
-        targetPath: '$(PUBLISH_DIR)/app.zip'
-        artifact: '$(ARTIFACT_NAME)'
+        targetPath: '$(PUBLISH_DIR)'   # publish the folder, not app.zip itself
+        artifact: 'drop'
 
