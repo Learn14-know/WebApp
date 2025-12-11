@@ -49,13 +49,17 @@ stages:
               artifact: $(ARTIFACT_NAME)
               path: $(Pipeline.Workspace)/drop
 
-          - task: AzureWebApp@1
-            displayName: "Deploy to Dev"
+          - task: AzureRmWebAppDeployment@5
+            displayName: "Deploy to Dev (Linux)"
             inputs:
+              ConnectionType: 'AzureRM'
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_DEV)
-              resourceGroupName: $(RG_DEV)
-              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+              appType: 'webAppLinux'
+              WebAppName: $(APP_DEV)
+              ResourceGroupName: $(RG_DEV)
+              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+              RuntimeStack: 'DOTNETCORE|8.0'
+              DeploymentTypeLinux: 'oneDeploy'
 
 # ---------------------- DEPLOY STAGING ----------------------
 - stage: Deploy_Staging
@@ -85,7 +89,6 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appType: 'webAppLinux'
               WebAppName: $(APP_STG)
-              deployToSlotOrASE: true
               ResourceGroupName: $(RG_STAGING)
               SlotName: 'green'
               packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
@@ -114,14 +117,6 @@ stages:
                 echo "ERROR: Green slot did not become healthy."
                 exit 1
 
-          - task: AzureWebApp@1
-            displayName: "Deploy Staging Production Slot (Optional)"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_STG)
-              resourceGroupName: $(RG_STAGING)
-              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
-
 # ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
 - stage: Deploy_Prod
   displayName: "Deploy to Production"
@@ -143,14 +138,18 @@ stages:
               artifact: $(ARTIFACT_NAME)
               path: $(Pipeline.Workspace)/drop
 
-          - task: AzureWebApp@1
-            displayName: "Deploy to Blue Slot"
+          - task: AzureRmWebAppDeployment@5
+            displayName: "Deploy to Blue Slot - Production"
             inputs:
+              ConnectionType: 'AzureRM'
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appName: $(APP_PRD)
-              resourceGroupName: $(RG_PRD)
-              slotName: blue
-              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+              appType: 'webAppLinux'
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PRD)
+              SlotName: 'blue'
+              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+              RuntimeStack: 'DOTNETCORE|8.0'
+              DeploymentTypeLinux: 'oneDeploy'
 
           - task: AzureCLI@2
             displayName: "Health Check - Blue Slot"
@@ -159,7 +158,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/"
+                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/health"
                 echo "Waiting for blue slot to be healthy..."
                 for i in {1..30}; do
                   STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SLOT_URL || echo 000)
