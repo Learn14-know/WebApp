@@ -2,9 +2,9 @@
 resources:
   pipelines:
   - pipeline: WebAppCI
-    project: WebApp
+    project: WebApp          # Replace with your actual DevOps project name
     source: Learn14-know.WebApp
-    trigger: true   # Auto-trigger when CI pipeline completes
+    trigger: true            # Auto-trigger when CI pipeline completes
 
 variables:
   # App Names
@@ -35,17 +35,15 @@ stages:
           deploy:
             steps:
 
+            # Download artifact from the triggering CI run
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
+                buildType: current       # ✅ download from current triggering CI run
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
+            # Deploy to Dev
             - task: AzureWebApp@1
               displayName: "Deploy to Dev"
               inputs:
@@ -69,11 +67,7 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
+                buildType: current
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -100,11 +94,7 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
+                buildType: current
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -118,7 +108,7 @@ stages:
                 slotName: blue
                 package: "$(Pipeline.Workspace)/drop/app.zip"
 
-            # Slot Swap (BLUE → Production) using CLI
+            # Swap BLUE → Production using CLI
             - task: AzureCLI@2
               displayName: "Swap Blue Slot to Production"
               inputs:
@@ -126,6 +116,7 @@ stages:
                 scriptType: bash
                 scriptLocation: inlineScript
                 inlineScript: |
+                  echo "Starting blue → production slot swap..."
                   az webapp deployment slot swap \
                     --name $(APP_PRD) \
                     --resource-group $(RG_PRD) \
