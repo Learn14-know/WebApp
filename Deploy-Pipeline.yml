@@ -18,7 +18,7 @@ variables:
   CI_PROJECT: 'WebApp'                     # DevOps project name
   CI_PIPELINE_NAME: 'Learn14-know.WebApp' # CI pipeline name
   ARTIFACT_NAME: 'drop'                    # Artifact name in CI
-  BUILD_ID: 61                             # Specific CI build ID to deploy
+  BUILD_ID: 443                             # Specific CI build ID to deploy
 
 stages:
 
