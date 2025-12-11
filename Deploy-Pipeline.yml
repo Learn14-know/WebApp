@@ -18,6 +18,7 @@ variables:
   CI_PROJECT: 'WebApp'                     # DevOps project name
   CI_PIPELINE_NAME: 'Learn14-know.WebApp' # CI pipeline name
   ARTIFACT_NAME: 'drop'                    # Artifact name in CI
+  BUILD_ID: 61                             # Specific CI build ID to deploy
 
 stages:
 
@@ -32,27 +33,17 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI
+          # Download artifact from specific CI build
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact (Dev)'
             inputs:
-              buildType: 'latest'
+              buildType: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'specific'
+              buildId: $(BUILD_ID)
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
-
-          # Find app.zip dynamically
-          - script: |
-              echo "Searching for app.zip..."
-              APP_ZIP=$(find $(Pipeline.Workspace)/drop -name "app.zip")
-              if [ -z "$APP_ZIP" ]; then
-                echo "##vso[task.logissue type=error]app.zip not found!"
-                exit 1
-              fi
-              echo "Found app.zip at: $APP_ZIP"
-              echo "##vso[task.setvariable variable=APP_ZIP_PATH]$APP_ZIP"
-            displayName: 'Locate app.zip'
 
           # Deploy to Dev
           - task: AzureWebApp@1
@@ -61,7 +52,7 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
               resourceGroupName: $(RG_DEV)
-              package: '$(APP_ZIP_PATH)'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
@@ -76,24 +67,15 @@ stages:
           steps:
 
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact (Staging)'
             inputs:
-              buildType: 'latest'
+              buildType: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'specific'
+              buildId: $(BUILD_ID)
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
-
-          - script: |
-              echo "Searching for app.zip..."
-              APP_ZIP=$(find $(Pipeline.Workspace)/drop -name "app.zip")
-              if [ -z "$APP_ZIP" ]; then
-                echo "##vso[task.logissue type=error]app.zip not found!"
-                exit 1
-              fi
-              echo "Found app.zip at: $APP_ZIP"
-              echo "##vso[task.setvariable variable=APP_ZIP_PATH]$APP_ZIP"
-            displayName: 'Locate app.zip'
 
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
@@ -101,7 +83,7 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
               resourceGroupName: $(RG_STAGING)
-              package: '$(APP_ZIP_PATH)'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
 - stage: Deploy_Prod
@@ -116,24 +98,15 @@ stages:
           steps:
 
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact (Prod)'
             inputs:
               buildType: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
+              buildVersionToDownload: 'specific'
+              buildId: $(BUILD_ID)
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
-
-          - script: |
-              echo "Searching for app.zip..."
-              APP_ZIP=$(find $(Pipeline.Workspace)/drop -name "app.zip")
-              if [ -z "$APP_ZIP" ]; then
-                echo "##vso[task.logissue type=error]app.zip not found!"
-                exit 1
-              fi
-              echo "Found app.zip at: $APP_ZIP"
-              echo "##vso[task.setvariable variable=APP_ZIP_PATH]$APP_ZIP"
-            displayName: 'Locate app.zip'
 
           # Deploy to Production Slot (Blue)
           - task: AzureWebApp@1
@@ -143,7 +116,7 @@ stages:
               appName: $(APP_PRD)
               resourceGroupName: $(RG_PRD)
               slotName: blue
-              package: '$(APP_ZIP_PATH)'
+              package: '$(Pipeline.Workspace)/drop/app.zip'
 
           # Swap Blue -> Production
           - task: AzureAppServiceManage@0
