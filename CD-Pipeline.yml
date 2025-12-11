@@ -14,9 +14,9 @@ variables:
   PROJECT_NAME: 'WebApp'           # <-- your DevOps project name
 
   # App Names
-  APP_DEV: 'app-RG-DEV'
-  APP_STG: 'app-RG-STAGING'
-  APP_PRD: 'app-RG-PROD-App'
+  APP_DEV: 'app-dev-app'
+  APP_STG: 'app-staging-app'
+  APP_PRD: 'app-prod-app'
 
   # Resource Groups
   RG_DEV: 'RG-DEV'
@@ -78,6 +78,22 @@ stages:
                 runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
+
+                
+            - task: AzureRmWebAppDeployment@5
+              displayName: "Deploy to Green Slot- Staging"
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: 'Appconnec'
+                appType: 'webAppLinux'
+                WebAppName: 'app-staging-app'
+                deployToSlotOrASE: true
+                ResourceGroupName: 'RG-STAGING'
+                SlotName: 'green'
+                packageForLinux: '$(System.DefaultWorkingDirectory)/**/*.zip'
+                RuntimeStack: 'DOTNETCORE|8.0'
+                DeploymentTypeLinux: 'oneDeploy'
+
 
             - task: AzureWebApp@1
               displayName: "Deploy to Staging"
