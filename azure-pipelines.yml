@@ -14,7 +14,6 @@ variables:
   APP_PRD: 'app-prod-app'
   HEALTHCHECK_URL: '/health'
 
-
 resources:
   pipelines:
     - pipeline: CI_Build
@@ -23,28 +22,26 @@ resources:
 
 stages:
 
-
-- stage: Download_Artifact
-  displayName: "Download Artifact (Only Once)"
+- stage: CD_Deploy
+  displayName: "CD Pipeline – Dev, Staging, Production"
   jobs:
-  - job: Download
-    displayName: "Download Build Artifact"
-    steps:
-      - download: CI_Build
-        artifact: $(ARTIFACT_NAME)
-        displayName: "Download Build Artifact"
 
-
-- stage: Deploy_Dev
-  dependsOn: Download_Artifact
-  displayName: "Deploy to Dev"
-  jobs:
+  ##########################################
+  # 1️⃣ Deploy to Dev
+  ##########################################
   - deployment: DeployDev
+    displayName: "Deploy to Dev"
     environment: dev
     strategy:
       runOnce:
         deploy:
           steps:
+          # Download artifact once
+          - download: CI_Build
+            artifact: $(ARTIFACT_NAME)
+            displayName: "Download Build Artifact"
+
+          # Deploy to Dev App Service
           - task: AzureWebApp@1
             displayName: "Deploy to Dev App Service"
             inputs:
@@ -53,20 +50,19 @@ stages:
               resourceGroupName: $(RG_DEV)
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-
-- stage: Deploy_Staging
-  dependsOn: Download_Artifact
-  displayName: "Deploy to Staging (Blue/Green)"
-  jobs:
-  - deployment: DeployStg
+  ##########################################
+  # 2️⃣ Deploy to Staging – Green slot → Production
+  ##########################################
+  - deployment: DeployStaging
+    displayName: "Deploy to Staging (Green slot)"
     environment: staging
     strategy:
       runOnce:
         deploy:
           steps:
-          # Deploy to BLUE slot
+          # Deploy to GREEN slot
           - task: AzureWebApp@1
-            displayName: "Deploy to BLUE slot (Staging)"
+            displayName: "Deploy to GREEN slot (Staging)"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
@@ -74,13 +70,13 @@ stages:
               slotName: "green"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-          # Health check on BLUE slot
+          # Health check on GREEN slot
           - task: PowerShell@2
-            displayName: "Health Check on Staging Green slot"
+            displayName: "Health Check on Staging GREEN slot"
             inputs:
               targetType: 'inline'
               script: |
-                $url = "https://$(APP_STG)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
+                $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
                 for ($i=0; $i -lt 12; $i++) {
                     try {
                         $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
@@ -91,9 +87,9 @@ stages:
                 Write-Error "Health check failed after multiple attempts"
                 exit 1
 
-          # Swap BLUE -> Production slot
+          # Swap GREEN → Production slot
           - task: AzureAppServiceManage@0
-            displayName: "Swap BLUE slot into Staging Production"
+            displayName: "Swap GREEN slot into Staging Production"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               WebAppName: $(APP_STG)
@@ -101,12 +97,11 @@ stages:
               SourceSlot: green
               TargetSlot: production
 
-
-- stage: Deploy_Prod
-  dependsOn: Download_Artifact
-  displayName: "Deploy to Production (Blue/Green)"
-  jobs:
+  ##########################################
+  # 3️⃣ Deploy to Production – Blue slot → Production
+  ##########################################
   - deployment: DeployProd
+    displayName: "Deploy to Production (Blue slot)"
     environment: production
     strategy:
       runOnce:
@@ -139,7 +134,7 @@ stages:
                 Write-Error "Health check failed after multiple attempts"
                 exit 1
 
-          # Swap BLUE -> Production
+          # Swap BLUE → Production slot
           - task: AzureAppServiceManage@0
             displayName: "Swap BLUE slot into LIVE Production"
             inputs:
