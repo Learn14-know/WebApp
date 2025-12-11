@@ -21,19 +21,19 @@ resources:
 
 stages:
 
-# --------------------- Download Artifact Once ---------------------
+
 - stage: Download_Artifact
   displayName: "Download Artifact (Only Once)"
   jobs:
     - job: Download
       displayName: "Download Build Artifact"
       steps:
-        # Download artifact from CI pipeline
+       
         - download: CI_Build
           artifact: $(ARTIFACT_NAME)
           displayName: "Download Build Artifact"
 
-        # Debug: list files to verify artifact location
+        
         - script: |
             echo "Listing downloaded artifact files:"
             ls -R $(Pipeline.Workspace)/CI_Build/$(ARTIFACT_NAME)
@@ -68,7 +68,7 @@ stages:
                   package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
 
-# --------------------- Deploy to Staging (Green slot) ---------------------
+
 - stage: Deploy_Staging
   displayName: "Deploy to Staging (Blue/Green)"
   dependsOn: Deploy_Dev
@@ -117,7 +117,6 @@ stages:
                   SourceSlot: green
                   TargetSlot: production
 
-# --------------------- Deploy to Production (Blue slot) ---------------------
 - stage: Deploy_Prod
   displayName: "Deploy to Production (Blue/Green)"
   dependsOn: Deploy_Staging
