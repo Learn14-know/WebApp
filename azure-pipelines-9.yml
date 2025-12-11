@@ -1,18 +1,16 @@
-
 # ---------------------- CD PIPELINE ----------------------
 
 resources:
   pipelines:
-    - pipeline: WebAppCI             # local reference name
-      source: Learn14-know.WebApp   # CI pipeline name
-      trigger:                       # auto-trigger on successful CI run
+    - pipeline: WebAppCI
+      source: Learn14-know.WebApp
+      trigger:
         branches:
           include:
             - main
 
 variables:
-  # Azure DevOps project
-  PROJECT_NAME: 'WebApp'           # <-- your DevOps project name
+  PROJECT_NAME: 'WebApp'
 
   # App Names
   APP_DEV: 'app-dev-app'
@@ -35,116 +33,158 @@ stages:
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   jobs:
-    - deployment: DeployDev
-      environment: dev
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download Latest CI Artifact"
-              inputs:
-                buildType: 'specific'
-                project: $(PROJECT_NAME)
-                pipeline: 'Learn14-know.WebApp'
-                runVersion: 'latest'
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
+  - deployment: DeployDev
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download Latest CI Artifact"
+            inputs:
+              buildType: 'specific'
+              project: $(PROJECT_NAME)
+              pipeline: 'Learn14-know.WebApp'
+              runVersion: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              path: $(Pipeline.Workspace)/drop
 
-            - task: AzureWebApp@1
-              displayName: "Deploy to Dev"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_DEV)
-                resourceGroupName: $(RG_DEV)
-                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+          - task: AzureWebApp@1
+            displayName: "Deploy to Dev"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_DEV)
+              resourceGroupName: $(RG_DEV)
+              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
 # ---------------------- DEPLOY STAGING ----------------------
 - stage: Deploy_Staging
   displayName: "Deploy to Staging"
   dependsOn: Deploy_Dev
   jobs:
-    - deployment: DeployStaging
-      environment: staging
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download Latest CI Artifact"
-              inputs:
-                buildType: 'specific'
-                project: $(PROJECT_NAME)
-                pipeline: 'Learn14-know.WebApp'
-                runVersion: 'latest'
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
+  - deployment: DeployStaging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download Latest CI Artifact"
+            inputs:
+              buildType: 'specific'
+              project: $(PROJECT_NAME)
+              pipeline: 'Learn14-know.WebApp'
+              runVersion: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              path: $(Pipeline.Workspace)/drop
 
-                
-            - task: AzureRmWebAppDeployment@5
-              displayName: "Deploy to Green Slot- Staging"
-              inputs:
-                ConnectionType: 'AzureRM'
-                azureSubscription: 'Appconnec'
-                appType: 'webAppLinux'
-                WebAppName: 'app-staging-app'
-                deployToSlotOrASE: true
-                ResourceGroupName: 'RG-STAGING'
-                SlotName: 'green'
-                packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
-                RuntimeStack: 'DOTNETCORE|8.0'
-                DeploymentTypeLinux: 'oneDeploy'
+          - task: AzureRmWebAppDeployment@5
+            displayName: "Deploy to Green Slot - Staging"
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appType: 'webAppLinux'
+              WebAppName: $(APP_STG)
+              deployToSlotOrASE: true
+              ResourceGroupName: $(RG_STAGING)
+              SlotName: 'green'
+              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+              RuntimeStack: 'DOTNETCORE|8.0'
+              DeploymentTypeLinux: 'oneDeploy'
 
+          - task: AzureCLI@2
+            displayName: "Health Check - Staging Green Slot"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                SLOT_URL="https://$(APP_STG)-green.azurewebsites.net/health"
+                echo "Waiting for staging green slot to be healthy..."
+                for i in {1..30}; do
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SLOT_URL || echo 000)
+                  if [ "$STATUS" -eq 200 ]; then
+                    echo "Green slot is healthy!"
+                    exit 0
+                  else
+                    echo "Health check failed (status=$STATUS). Retry in 10s..."
+                    sleep 10
+                  fi
+                done
+                echo "ERROR: Green slot did not become healthy."
+                exit 1
 
-            - task: AzureWebApp@1
-              displayName: "Deploy to Staging"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_STG)
-                resourceGroupName: $(RG_STAGING)
-                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+          - task: AzureWebApp@1
+            displayName: "Deploy Staging Production Slot (Optional)"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_STG)
+              resourceGroupName: $(RG_STAGING)
+              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
 # ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
 - stage: Deploy_Prod
   displayName: "Deploy to Production"
   dependsOn: Deploy_Staging
   jobs:
-    - deployment: DeployProd
-      environment: production
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download Latest CI Artifact"
-              inputs:
-                buildType: 'specific'
-                project: $(PROJECT_NAME)
-                pipeline: 'Learn14-know.WebApp'
-                runVersion: 'latest'
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download Latest CI Artifact"
+            inputs:
+              buildType: 'specific'
+              project: $(PROJECT_NAME)
+              pipeline: 'Learn14-know.WebApp'
+              runVersion: 'latest'
+              artifact: $(ARTIFACT_NAME)
+              path: $(Pipeline.Workspace)/drop
 
-            - task: AzureWebApp@1
-              displayName: "Deploy to Blue Slot"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_PRD)
-                resourceGroupName: $(RG_PRD)
-                slotName: blue
-                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+          - task: AzureWebApp@1
+            displayName: "Deploy to Blue Slot"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_PRD)
+              resourceGroupName: $(RG_PRD)
+              slotName: blue
+              package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
-            - task: AzureCLI@2
-              displayName: "Swap Blue Slot to Production"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                scriptType: bash
-                scriptLocation: inlineScript
-                inlineScript: |
-                  echo "Starting blue → production slot swap..."
-                  az webapp deployment slot swap \
-                    --name $(APP_PRD) \
-                    --resource-group $(RG_PRD) \
-                    --slot blue \
-                    --target-slot production
-                  echo "Swap completed successfully."
+          - task: AzureCLI@2
+            displayName: "Health Check - Blue Slot"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/health"
+                echo "Waiting for blue slot to be healthy..."
+                for i in {1..30}; do
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SLOT_URL || echo 000)
+                  if [ "$STATUS" -eq 200 ]; then
+                    echo "Blue slot is healthy!"
+                    exit 0
+                  else
+                    echo "Health check failed (status=$STATUS). Retry in 10s..."
+                    sleep 10
+                  fi
+                done
+                echo "ERROR: Blue slot did not become healthy."
+                exit 1
+
+          - task: AzureCLI@2
+            displayName: "Swap Blue Slot to Production"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Starting blue → production slot swap..."
+                az webapp deployment slot swap \
+                  --name $(APP_PRD) \
+                  --resource-group $(RG_PRD) \
+                  --slot blue \
+                  --target-slot production
+                echo "Swap completed successfully."
