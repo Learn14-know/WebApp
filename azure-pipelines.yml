@@ -94,3 +94,60 @@ stages:
             displayName: "Swap GREEN slot into Production"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              WebAppName: $(APP_STG)
+              ResourceGroupName: $(RG_STAGING)
+              SourceSlot: green
+              TargetSlot: production
+
+# --------------------- Production Deployment (Blue/Green) ---------------------
+- stage: Deploy_Prod
+  displayName: "Deploy to Production (Blue/Green)"
+  dependsOn: Deploy_Staging
+  jobs:
+  - deployment: DeployProd
+    environment: production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          # Download artifact
+          - download: CI_Build
+            artifact: $(ARTIFACT_NAME)
+            displayName: "Download Build Artifact"
+
+          # Deploy to BLUE slot
+          - task: AzureWebApp@1
+            displayName: "Deploy to BLUE slot (Production)"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              appName: $(APP_PRD)
+              resourceGroupName: $(RG_PROD)
+              slotName: "blue"
+              package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
+
+          # Health check on BLUE slot
+          - task: PowerShell@2
+            displayName: "Health Check on BLUE slot"
+            inputs:
+              targetType: 'inline'
+              script: |
+                $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
+                for ($i=0; $i -lt 12; $i++) {
+                    try { 
+                        $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+                        if ($resp.StatusCode -eq 200) { exit 0 } 
+                    } catch {}
+                    Start-Sleep -Seconds 10
+                }
+                Write-Error "Health check failed after multiple attempts"
+                exit 1
+
+          # Swap BLUE slot into LIVE Production
+          - task: AzureAppServiceManage@0
+            displayName: "Swap BLUE slot into LIVE Production"
+            inputs:
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PROD)
+              SourceSlot: blue
+              TargetSlot: production
