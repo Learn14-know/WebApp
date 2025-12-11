@@ -1,4 +1,4 @@
-trigger: none  # CD runs manually
+trigger: none   # CD pipeline runs manually
 
 variables:
   # App Names
@@ -9,15 +9,15 @@ variables:
   # Resource Groups
   RG_DEV: 'RG-DEV'
   RG_STAGING: 'RG-STAGING'
-  RG_PRD: 'RG-PROD-App'
+  RG_PROD: 'RG-PROD-App'
 
   # Azure service connection
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'WebApp'        # DevOps project name
-  CI_PIPELINE_ID: '61'        # Learn14-know.WebApp pipeline ID
-  ARTIFACT_NAME: 'drop'       # Artifact name in CI
+  CI_PROJECT: 'WebApp'                   # DevOps project name
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp'  # CI pipeline name
+  ARTIFACT_NAME: 'drop'                     # Artifact name published in CI
 
 stages:
 
@@ -31,23 +31,33 @@ stages:
       runOnce:
         deploy:
           steps:
+
+          # Download latest artifact from CI pipeline
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'specificPipeline'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Optional: check the downloaded artifact
+          - script: |
+              echo "Contents of downloaded artifact:"
+              ls -R $(Pipeline.Workspace)/drop
+            displayName: 'Check downloaded artifact'
+
+          # Deploy to Dev
           - task: AzureWebApp@1
             displayName: 'Deploy to Dev'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
               resourceGroupName: $(RG_DEV)
-              package: '$(Pipeline.Workspace)/drop/app.zip'
+              package: '$(Pipeline.Workspace)/drop/**/*.zip'
+
 
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
@@ -60,12 +70,13 @@ stages:
       runOnce:
         deploy:
           steps:
+
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'specificPipeline'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
@@ -76,7 +87,8 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_STG)
               resourceGroupName: $(RG_STAGING)
-              package: '$(Pipeline.Workspace)/drop/app.zip'
+              package: '$(Pipeline.Workspace)/drop/**/*.zip'
+
 
 # ---------------------- PRODUCTION BLUE-GREEN -------------------------
 - stage: Deploy_Prod
@@ -89,30 +101,33 @@ stages:
       runOnce:
         deploy:
           steps:
+
           - task: DownloadPipelineArtifact@2
             displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specific'
+              source: 'specificPipeline'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Deploy to Production Slot (Blue)
           - task: AzureWebApp@1
             displayName: 'Deploy to Production Slot (Blue)'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_PRD)
-              resourceGroupName: $(RG_PRD)
+              resourceGroupName: $(RG_PROD)
               slotName: blue
-              package: '$(Pipeline.Workspace)/drop/app.zip'
+              package: '$(Pipeline.Workspace)/drop/**/*.zip'
 
+          # Swap Blue -> Production
           - task: AzureAppServiceManage@0
             displayName: 'Swap Blue Slot Into Production'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               WebAppName: $(APP_PRD)
-              ResourceGroupName: $(RG_PRD)
+              ResourceGroupName: $(RG_PROD)
               SourceSlot: blue
               TargetSlot: production
