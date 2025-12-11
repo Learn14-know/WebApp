@@ -1,81 +1,150 @@
-trigger: none   # CD is usually triggered manually or from a release pipeline
 
-pool:
-  vmImage: ubuntu-latest
+# ---------------------- CD PIPELINE ----------------------
+
+resources:
+  pipelines:
+    - pipeline: WebAppCI             # local reference name
+      source: Learn14-know.WebApp   # CI pipeline name
+      trigger:                       # auto-trigger on successful CI run
+        branches:
+          include:
+            - main
 
 variables:
-  ARTIFACT_NAME: 'drop'
-  AZURE_SERVICE_CONNECTION: 'Appconnec'
+  # Azure DevOps project
+  PROJECT_NAME: 'WebApp'           # <-- your DevOps project name
 
-  RG_DEV: 'RG-DEV'
-  RG_STAGING: 'RG-STAGING'
-  RG_PROD: 'RG-PROD-App'
-
+  # App Names
   APP_DEV: 'app-dev-app'
   APP_STG: 'app-staging-app'
   APP_PRD: 'app-prod-app'
 
+  # Resource Groups
+  RG_DEV: 'RG-DEV'
+  RG_STAGING: 'RG-STAGING'
+  RG_PRD: 'RG-PROD-App'
+
+  # Azure service connection
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+  # Artifact
+  ARTIFACT_NAME: 'drop'
+
+# ---------------------- DEPLOY DEV ----------------------
 stages:
-- stage: Download
-  displayName: "Download CI Artifact"
+- stage: Deploy_Dev
+  displayName: "Deploy to Dev"
   jobs:
-  - job: DownloadArtifactJob
-    steps:
-    - task: DownloadPipelineArtifact@2
-      displayName: "Download CI Artifact"
-      inputs:
-        buildType: 'specific'
-        project: 'WebApp'
-        definition: '585'
-        buildVersionToDownload: 'latest'
-        artifactName: '$(ARTIFACT_NAME)'
-        targetPath: '$(Pipeline.Workspace)/drop'
-        
+    - deployment: DeployDev
+      environment: dev
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: DownloadPipelineArtifact@2
+              displayName: "Download Latest CI Artifact"
+              inputs:
+                buildType: 'specific'
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
+                runVersion: 'latest'
+                artifact: $(ARTIFACT_NAME)
+                path: $(Pipeline.Workspace)/drop
 
+            - task: AzureWebApp@1
+              displayName: "Deploy to Dev"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                appName: $(APP_DEV)
+                resourceGroupName: $(RG_DEV)
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
-- stage: DeployDev
-  displayName: "Deploy to DEV Web App"
-  dependsOn: Download
+# ---------------------- DEPLOY STAGING ----------------------
+- stage: Deploy_Staging
+  displayName: "Deploy to Staging"
+  dependsOn: Deploy_Dev
   jobs:
-  - job: DevDeployment
-    steps:
-    - task: AzureWebApp@1
-      displayName: "Deploy to DEV App Service"
-      inputs:
-        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-        appType: 'webAppLinux'
-        appName: '$(APP_DEV)'
-        resourceGroupName: '$(RG_DEV)'
-        package: '$(Pipeline.Workspace)/drop/app.zip'
+    - deployment: DeployStaging
+      environment: staging
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: DownloadPipelineArtifact@2
+              displayName: "Download Latest CI Artifact"
+              inputs:
+                buildType: 'specific'
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
+                runVersion: 'latest'
+                artifact: $(ARTIFACT_NAME)
+                path: $(Pipeline.Workspace)/drop
+
+                
+            - task: AzureRmWebAppDeployment@5
+              displayName: "Deploy to Green Slot- Staging"
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: 'Appconnec'
+                appType: 'webAppLinux'
+                WebAppName: 'app-staging-app'
+                deployToSlotOrASE: true
+                ResourceGroupName: 'RG-STAGING'
+                SlotName: 'green'
+                packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+                RuntimeStack: 'DOTNETCORE|8.0'
+                DeploymentTypeLinux: 'oneDeploy'
 
 
-- stage: DeployStaging
-  displayName: "Deploy to STAGING Web App"
-  dependsOn: DeployDev
+            - task: AzureWebApp@1
+              displayName: "Deploy to Staging"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                appName: $(APP_STG)
+                resourceGroupName: $(RG_STAGING)
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+
+# ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
+- stage: Deploy_Prod
+  displayName: "Deploy to Production"
+  dependsOn: Deploy_Staging
   jobs:
-  - job: StagingDeployment
-    steps:
-    - task: AzureWebApp@1
-      displayName: "Deploy to STAGING App Service"
-      inputs:
-        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-        appType: 'webAppLinux'
-        appName: '$(APP_STG)'
-        resourceGroupName: '$(RG_STAGING)'
-        package: '$(Pipeline.Workspace)/drop/app.zip'
+    - deployment: DeployProd
+      environment: production
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: DownloadPipelineArtifact@2
+              displayName: "Download Latest CI Artifact"
+              inputs:
+                buildType: 'specific'
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
+                runVersion: 'latest'
+                artifact: $(ARTIFACT_NAME)
+                path: $(Pipeline.Workspace)/drop
 
-- stage: DeployProd
-  displayName: "Deploy to PROD Web App"
-  dependsOn: DeployStaging
-  jobs:
-  - job: ProdDeployment
-    steps:
-    - task: AzureWebApp@1
-      displayName: "Deploy to PROD App Service"
-      inputs:
-        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
-        appType: 'webAppLinux'
-        appName: '$(APP_PRD)'
-        resourceGroupName: '$(RG_PROD)'
-        package: '$(Pipeline.Workspace)/drop/app.zip'
+            - task: AzureWebApp@1
+              displayName: "Deploy to Blue Slot"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                appName: $(APP_PRD)
+                resourceGroupName: $(RG_PRD)
+                slotName: blue
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
+            - task: AzureCLI@2
+              displayName: "Swap Blue Slot to Production"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  echo "Starting blue → production slot swap..."
+                  az webapp deployment slot swap \
+                    --name $(APP_PRD) \
+                    --resource-group $(RG_PRD) \
+                    --slot blue \
+                    --target-slot production
+                  echo "Swap completed successfully."
