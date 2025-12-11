@@ -25,7 +25,7 @@ stages:
       displayName: "Download CI Artifact"
       inputs:
         buildType: 'specific'
-        project: 'Learn14-know.WebApp'
+        project: 'WebApp'
         definition: '575'
         buildVersionToDownload: 'latest'
         artifactName: '$(ARTIFACT_NAME)'
