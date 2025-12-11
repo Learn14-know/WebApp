@@ -20,20 +20,26 @@ resources:
       source: "Learn14-know.WebApp"
       trigger: true
 
+# =============================================================
+#  DOWNLOAD ARTIFACT  (Fixed)
+# =============================================================
 stages:
-# --------------------- Download Artifact ---------------------
   - stage: Download_Artifact
     displayName: "Download Artifact"
     jobs:
       - job: Download
         displayName: "Download Artifact Job"
         steps:
-          - download: ci
-            artifact: $(ARTIFACT_NAME)
+          # FIXED — always download artifact from THIS run
+          - task: DownloadPipelineArtifact@2
             displayName: "Download CI Artifact"
+            inputs:
+              buildType: current
+              artifact: $(ARTIFACT_NAME)
+              path: $(Pipeline.Workspace)
 
           - script: |
-              ARTIFACT_PATH="$(Pipeline.Workspace)/ci/$(ARTIFACT_NAME)"
+              ARTIFACT_PATH="$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
               echo "Pipeline.Workspace: $(Pipeline.Workspace)"
               echo "Artifact path: $ARTIFACT_PATH"
               echo "Listing workspace root:"
@@ -42,7 +48,9 @@ stages:
               ls -R "$ARTIFACT_PATH"
             displayName: "Debug - List Artifact Files"
 
-# --------------------- Deploy to Dev ---------------------
+# =============================================================
+#  DEPLOY TO DEV
+# =============================================================
   - stage: Deploy_Dev
     displayName: "Deploy to Dev"
     dependsOn: Download_Artifact
@@ -63,9 +71,12 @@ stages:
                     azureSubscription: $(AZURE_SERVICE_CONNECTION)
                     appName: $(APP_DEV)
                     resourceGroupName: $(RG_DEV)
-                    package: "$(Pipeline.Workspace)/ci/$(ARTIFACT_NAME)/DotNetWebApp.zip"
+                    # FIXED — path no longer includes /ci/
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
-# --------------------- Deploy to Staging (Green slot) ---------------------
+# =============================================================
+#  DEPLOY TO STAGING (GREEN)
+# =============================================================
   - stage: Deploy_Staging
     displayName: "Deploy to Staging (Green slot)"
     dependsOn: Deploy_Dev
@@ -87,7 +98,7 @@ stages:
                     appName: $(APP_STG)
                     resourceGroupName: $(RG_STAGING)
                     slotName: "green"
-                    package: "$(Pipeline.Workspace)/ci/$(ARTIFACT_NAME)/DotNetWebApp.zip"
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
                 - task: PowerShell@2
                   displayName: "Health Check on GREEN slot"
@@ -114,7 +125,9 @@ stages:
                     SourceSlot: green
                     TargetSlot: production
 
-# --------------------- Deploy to Production (Blue slot) ---------------------
+# =============================================================
+#  DEPLOY TO PROD (BLUE)
+# =============================================================
   - stage: Deploy_Prod
     displayName: "Deploy to Production (Blue slot)"
     dependsOn: Deploy_Staging
@@ -136,7 +149,7 @@ stages:
                     appName: $(APP_PRD)
                     resourceGroupName: $(RG_PROD)
                     slotName: "blue"
-                    package: "$(Pipeline.Workspace)/ci/$(ARTIFACT_NAME)/DotNetWebApp.zip"
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
                 - task: PowerShell@2
                   displayName: "Health Check on BLUE slot"
