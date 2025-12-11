@@ -65,7 +65,8 @@ stages:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   appName: $(APP_DEV)
                   resourceGroupName: $(RG_DEV)
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/publish/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
+
 
 # --------------------- Deploy to Staging (Green slot) ---------------------
 - stage: Deploy_Staging
@@ -89,7 +90,7 @@ stages:
                   appName: $(APP_STG)
                   resourceGroupName: $(RG_STAGING)
                   slotName: "green"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/publish/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
               - task: PowerShell@2
                 displayName: "Health Check on GREEN slot"
@@ -138,7 +139,7 @@ stages:
                   appName: $(APP_PRD)
                   resourceGroupName: $(RG_PROD)
                   slotName: "blue"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/publish/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
               - task: PowerShell@2
                 displayName: "Health Check on BLUE slot"
