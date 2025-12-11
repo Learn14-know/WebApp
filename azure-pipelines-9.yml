@@ -159,7 +159,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/health"
+                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/"
                 echo "Waiting for blue slot to be healthy..."
                 for i in {1..30}; do
                   STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SLOT_URL || echo 000)
