@@ -43,7 +43,8 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
               resourceGroupName: $(RG_DEV)
-              package: "$(Pipeline.Workspace)/CI_Build/drop/publish/app.zip"
+              package: "$(Pipeline.Workspace)/CI_Build/drop/app.zip"
+
 
 
 
@@ -71,7 +72,8 @@ stages:
               appName: $(APP_STG)
               resourceGroupName: $(RG_STAGING)
               slotName: "green"
-              package: "$(Pipeline.Workspace)/CI_Build/drop/publish/app.zip"
+              package: "$(Pipeline.Workspace)/CI_Build/drop/app.zip"
+
 
 
           # Health check on GREEN slot
@@ -125,7 +127,8 @@ stages:
               appName: $(APP_PRD)
               resourceGroupName: $(RG_PROD)
               slotName: "blue"
-              package: "$(Pipeline.Workspace)/CI_Build/drop/publish/app.zip"
+              package: "$(Pipeline.Workspace)/CI_Build/drop/app.zip"
+
 
 
           # Health check on BLUE slot
