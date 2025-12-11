@@ -1,23 +1,33 @@
-# Auto-trigger from CI
+# ---------------------- CD PIPELINE ----------------------
+
 resources:
   pipelines:
-    - pipeline: WebAppCI
-      project: WebApp             # Replace with actual DevOps project name
-      source: Learn14-know.WebApp
-      trigger: true               # Automatically trigger when CI completes
+    - pipeline: WebAppCI             # local reference name
+      source: Learn14-know.WebApp   # CI pipeline name
+      trigger:                       # auto-trigger on successful CI run
+        branches:
+          include:
+            - main
 
 variables:
+  # App Names
   APP_DEV: 'app-RG-DEV'
   APP_STG: 'app-RG-STAGING'
   APP_PRD: 'app-RG-PROD-App'
+
+  # Resource Groups
   RG_DEV: 'RG-DEV'
   RG_STAGING: 'RG-STAGING'
   RG_PRD: 'RG-PRD-App'
+
+  # Azure service connection
   AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+  # Artifact
   ARTIFACT_NAME: 'drop'
 
-stages:
 # ---------------------- DEPLOY DEV ----------------------
+stages:
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   jobs:
@@ -27,11 +37,13 @@ stages:
         runOnce:
           deploy:
             steps:
-
             - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
+              displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: current
+                buildType: latestFromBranch
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                branchName: main
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -54,11 +66,13 @@ stages:
         runOnce:
           deploy:
             steps:
-
             - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
+              displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: current
+                buildType: latestFromBranch
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                branchName: main
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -81,11 +95,13 @@ stages:
         runOnce:
           deploy:
             steps:
-
             - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
+              displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: current
+                buildType: latestFromBranch
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                branchName: main
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
