@@ -1,0 +1,65 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
+  ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
+
+stages:
+
+- stage: Build_Test
+  displayName: "CI — Build and Test"
+  jobs:
+  - job: BuildJob
+    displayName: Build Job
+    steps:
+
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '$(DOTNET_VERSION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        command: 'restore'
+        projects: 'DotNetWebApp.sln'
+        feedsToUse: 'select'
+        vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Solution'
+      inputs:
+        command: 'build'
+        projects: 'DotNetWebApp.sln'
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Unit Tests'
+      inputs:
+        command: 'test'
+        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
+        arguments: '--logger trx --configuration $(BUILD_CONFIGURATION)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Web Project'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(WEB_PROJECT)'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
+        zipAfterPublish: true
+        zipFileName: 'app.zip'   # ✅ ensure the ZIP name is always app.zip
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifact'
+      inputs:
+        targetPath: '$(PUBLISH_DIR)'
+        artifact: '$(ARTIFACT_NAME)'
