@@ -85,7 +85,7 @@ stages:
                 azureSubscription: $(AZURE_SERVICE_CONNECTION)
                 appName: $(APP_STG)
                 resourceGroupName: $(RG_STAGING)
-                package: "$(Pipeline.Workspace)/drop/app.zip"
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
 # ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
 - stage: Deploy_Prod
@@ -115,7 +115,7 @@ stages:
                 appName: $(APP_PRD)
                 resourceGroupName: $(RG_PRD)
                 slotName: blue
-                package: "$(Pipeline.Workspace)/drop/app.zip"
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
             - task: AzureCLI@2
               displayName: "Swap Blue Slot to Production"
