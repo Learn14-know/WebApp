@@ -40,10 +40,10 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: latestFromBranch
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                branchName: main
+                buildType: 'specific'
+                project: $(resources.pipeline.WebAppCI.project)
+                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -69,10 +69,10 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: latestFromBranch
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                branchName: main
+                buildType: 'specific'
+                project: $(resources.pipeline.WebAppCI.project)
+                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -98,10 +98,10 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download Latest CI Artifact"
               inputs:
-                buildType: latestFromBranch
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                branchName: main
+                buildType: 'specific'
+                project: $(resources.pipeline.WebAppCI.project)
+                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
