@@ -16,183 +16,147 @@ variables:
 
 resources:
   pipelines:
-    - pipeline: CI_Build
-      source: Learn14-know.WebApp
+    - pipeline: ci
+      source: "Learn14-know.WebApp"
       trigger: true
 
-# ---------------------------------------------------------------------
-# 1. DOWNLOAD ARTIFACT + FULL DEBUG
-# ---------------------------------------------------------------------
-
+# --------------------- Download Artifact ---------------------
 stages:
-- stage: Download_Artifact
-  displayName: "Download Artifact + DEBUG"
-  jobs:
-    - job: Download
-      displayName: "Download Build Artifact"
-      steps:
+  - stage: Download_Artifact
+    displayName: "Download Artifact"
+    jobs:
+      - job: Download
+        displayName: "Download Artifact Job"
+        steps:
+          - download: ci
+            artifact: $(ARTIFACT_NAME)
+            displayName: "Download CI Artifact"
 
-        - download: CI_Build
-          artifact: $(ARTIFACT_NAME)
-          displayName: "Download CI Artifact"
+          - script: |
+              echo "Pipeline.Workspace: $(Pipeline.Workspace)"
+              echo "Listing workspace root:"
+              ls -R $(Pipeline.Workspace)
+              echo "Listing artifact folder:"
+              ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
+            displayName: "Debug - List Artifact Files"
 
-        # 🔥 FULL DEBUG: Show workspace + artifact structure
-        - script: |
-            echo "====================== DEBUG START ======================"
-            echo "Pipeline.Workspace:"
-            echo "$(Pipeline.Workspace)"
-            echo ""
+# --------------------- Deploy to Dev ---------------------
+  - stage: Deploy_Dev
+    displayName: "Deploy to Dev"
+    dependsOn: Download_Artifact
+    jobs:
+      - deployment: DeployDev
+        environment: dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(ARTIFACT_NAME)
+                  displayName: "Download artifact from previous stage"
 
-            echo "Listing Workspace root:"
-            ls -al "$(Pipeline.Workspace)"
-            echo ""
+                - task: AzureWebApp@1
+                  displayName: "Deploy to Dev App Service"
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    appName: $(APP_DEV)
+                    resourceGroupName: $(RG_DEV)
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
-            echo "Recursive workspace listing:"
-            ls -R "$(Pipeline.Workspace)"
-            echo ""
+# --------------------- Deploy to Staging (Green slot) ---------------------
+  - stage: Deploy_Staging
+    displayName: "Deploy to Staging (Green slot)"
+    dependsOn: Deploy_Dev
+    jobs:
+      - deployment: DeployStg
+        environment: staging
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(ARTIFACT_NAME)
+                  displayName: "Download artifact from previous stage"
 
-            echo "Expected artifact folder:"
-            echo "$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
-            echo ""
+                - task: AzureWebApp@1
+                  displayName: "Deploy to GREEN slot"
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    appName: $(APP_STG)
+                    resourceGroupName: $(RG_STAGING)
+                    slotName: "green"
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
-            if [ -d "$(Pipeline.Workspace)/$(ARTIFACT_NAME)" ]; then
-              echo "Artifact directory exists"
-              ls -al "$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
-            else
-              echo "❌ Artifact directory NOT FOUND at: $(Pipeline.Workspace)/$(ARTIFACT_NAME)"
-            fi
+                - task: PowerShell@2
+                  displayName: "Health Check on GREEN slot"
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
+                      for ($i=0; $i -lt 12; $i++) {
+                          try {
+                              $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+                              if ($resp.StatusCode -eq 200) { exit 0 }
+                          } catch {}
+                          Start-Sleep -Seconds 10
+                      }
+                      Write-Error "Health check failed after multiple attempts"
+                      exit 1
 
-            echo "====================== DEBUG END ======================"
-          displayName: "DEBUG — Locate Artifact"
+                - task: AzureAppServiceManage@0
+                  displayName: "Swap GREEN slot into Production"
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    WebAppName: $(APP_STG)
+                    ResourceGroupName: $(RG_STAGING)
+                    SourceSlot: green
+                    TargetSlot: production
 
-# ---------------------------------------------------------------------
-# 2. DEPLOY TO DEV
-# ---------------------------------------------------------------------
+# --------------------- Deploy to Production (Blue slot) ---------------------
+  - stage: Deploy_Prod
+    displayName: "Deploy to Production (Blue slot)"
+    dependsOn: Deploy_Staging
+    jobs:
+      - deployment: DeployProd
+        environment: production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(ARTIFACT_NAME)
+                  displayName: "Download artifact from previous stage"
 
-- stage: Deploy_Dev
-  displayName: "Deploy to Dev"
-  dependsOn: Download_Artifact
-  jobs:
-    - deployment: DeployDev
-      environment: dev
-      strategy:
-        runOnce:
-          deploy:
-            steps:
+                - task: AzureWebApp@1
+                  displayName: "Deploy to BLUE slot"
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    appName: $(APP_PRD)
+                    resourceGroupName: $(RG_PROD)
+                    slotName: "blue"
+                    package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp.zip"
 
-              - download: current
-                artifact: $(ARTIFACT_NAME)
+                - task: PowerShell@2
+                  displayName: "Health Check on BLUE slot"
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
+                      for ($i=0; $i -lt 12; $i++) {
+                          try {
+                              $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+                              if ($resp.StatusCode -eq 200) { exit 0 }
+                          } catch {}
+                          Start-Sleep -Seconds 10
+                      }
+                      Write-Error "Health check failed after multiple attempts"
+                      exit 1
 
-              - task: AzureWebApp@1
-                displayName: "Deploy to Dev App Service"
-                inputs:
-                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                  appName: $(APP_DEV)
-                  resourceGroupName: $(RG_DEV)
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-# ---------------------------------------------------------------------
-# 3. DEPLOY TO STAGING (GREEN SLOT)
-# ---------------------------------------------------------------------
-
-- stage: Deploy_Staging
-  displayName: "Deploy to Staging"
-  dependsOn: Deploy_Dev
-  jobs:
-    - deployment: DeployStg
-      environment: staging
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-
-              - download: current
-                artifact: $(ARTIFACT_NAME)
-
-              - task: AzureWebApp@1
-                displayName: "Deploy to GREEN slot"
-                inputs:
-                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                  appName: $(APP_STG)
-                  resourceGroupName: $(RG_STAGING)
-                  slotName: "green"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-              - task: PowerShell@2
-                displayName: "Health Check GREEN"
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
-                    Write-Host "Checking health: $url"
-                    for ($i=1; $i -le 12; $i++) {
-                      try {
-                        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
-                        if ($r.StatusCode -eq 200) { exit 0 }
-                      } catch {}
-                      Start-Sleep 10
-                    }
-                    Write-Error "Health check failed"
-                    exit 1
-
-              - task: AzureAppServiceManage@0
-                displayName: "Swap GREEN → Prod"
-                inputs:
-                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                  WebAppName: $(APP_STG)
-                  ResourceGroupName: $(RG_STAGING)
-                  SourceSlot: green
-                  TargetSlot: production
-
-# ---------------------------------------------------------------------
-# 4. DEPLOY TO PRODUCTION (BLUE SLOT)
-# ---------------------------------------------------------------------
-
-- stage: Deploy_Prod
-  displayName: "Deploy to Production"
-  dependsOn: Deploy_Staging
-  jobs:
-    - deployment: DeployProd
-      environment: production
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-
-              - download: current
-                artifact: $(ARTIFACT_NAME)
-
-              - task: AzureWebApp@1
-                displayName: "Deploy to BLUE slot"
-                inputs:
-                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                  appName: $(APP_PRD)
-                  resourceGroupName: $(RG_PROD)
-                  slotName: "blue"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
-
-              - task: PowerShell@2
-                displayName: "Health Check BLUE"
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
-                    Write-Host "Checking health: $url"
-                    for ($i=1; $i -le 12; $i++) {
-                      try {
-                        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
-                        if ($r.StatusCode -eq 200) { exit 0 }
-                      } catch {}
-                      Start-Sleep 10
-                    }
-                    Write-Error "Health check failed"
-                    exit 1
-
-              - task: AzureAppServiceManage@0
-                displayName: "Swap BLUE → LIVE"
-                inputs:
-                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                  WebAppName: $(APP_PRD)
-                  ResourceGroupName: $(RG_PROD)
-                  SourceSlot: blue
-                  TargetSlot: production
+                - task: AzureAppServiceManage@0
+                  displayName: "Swap BLUE slot into LIVE Production"
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    WebAppName: $(APP_PRD)
+                    ResourceGroupName: $(RG_PROD)
+                    SourceSlot: blue
+                    TargetSlot: production
