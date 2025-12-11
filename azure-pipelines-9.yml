@@ -1,0 +1,77 @@
+trigger: none   # CD is usually triggered manually or from a release pipeline
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  ARTIFACT_NAME: 'drop'
+  AZURE_SERVICE_CONNECTION: 'Appconnec'
+
+  RG_DEV: 'RG-DEV'
+  RG_STAGING: 'RG-STAGING'
+  RG_PROD: 'RG-PROD-App'
+
+  APP_DEV: 'app-dev-app'
+  APP_STG: 'app-staging-app'
+  APP_PRD: 'app-prod-app'
+
+stages:
+- stage: Download
+  displayName: "Download CI Artifact"
+  jobs:
+  - job: DownloadArtifactJob
+    steps:
+    - task: DownloadPipelineArtifact@2
+      displayName: "Download CI Artifact"
+      inputs:
+        buildType: 'specific'
+        artifactName: '$(ARTIFACT_NAME)'
+        targetPath: '$(Pipeline.Workspace)/drop'
+
+
+- stage: DeployDev
+  displayName: "Deploy to DEV Web App"
+  dependsOn: Download
+  jobs:
+  - job: DevDeployment
+    steps:
+    - task: AzureWebApp@1
+      displayName: "Deploy to DEV App Service"
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        appType: 'webAppLinux'
+        appName: '$(APP_DEV)'
+        resourceGroupName: '$(RG_DEV)'
+        package: '$(Pipeline.Workspace)/drop/app.zip'
+
+
+- stage: DeployStaging
+  displayName: "Deploy to STAGING Web App"
+  dependsOn: DeployDev
+  jobs:
+  - job: StagingDeployment
+    steps:
+    - task: AzureWebApp@1
+      displayName: "Deploy to STAGING App Service"
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        appType: 'webAppLinux'
+        appName: '$(APP_STG)'
+        resourceGroupName: '$(RG_STAGING)'
+        package: '$(Pipeline.Workspace)/drop/app.zip'
+
+- stage: DeployProd
+  displayName: "Deploy to PROD Web App"
+  dependsOn: DeployStaging
+  jobs:
+  - job: ProdDeployment
+    steps:
+    - task: AzureWebApp@1
+      displayName: "Deploy to PROD App Service"
+      inputs:
+        azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+        appType: 'webAppLinux'
+        appName: '$(APP_PRD)'
+        resourceGroupName: '$(RG_PROD)'
+        package: '$(Pipeline.Workspace)/drop/app.zip'
+
