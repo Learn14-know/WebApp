@@ -62,5 +62,6 @@ stages:
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Artifact'
       inputs:
-        targetPath: '$(PUBLISH_DIR)'
+        targetPath: '$(PUBLISH_DIR)/app.zip'
         artifact: '$(ARTIFACT_NAME)'
+
