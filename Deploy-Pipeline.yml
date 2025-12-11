@@ -1,7 +1,4 @@
-trigger: none  # Run manually or via CI trigger
-
-pool:
-  vmImage: ubuntu-latest
+trigger: none   # CD pipeline runs manually
 
 variables:
   # App Names
@@ -18,9 +15,9 @@ variables:
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'WebApp'                   # DevOps project name
-  CI_PIPELINE_NAME: 'Build-Pipeline'     # CI pipeline name
-  ARTIFACT_NAME: 'drop'                  # Artifact name in CI
+  CI_PROJECT: 'WebApp'             # DevOps project name
+  CI_PIPELINE_NAME: 'Build-Pipeline' # CI pipeline name
+  ARTIFACT_NAME: 'drop'            # Artifact name in CI
 
 stages:
 
@@ -35,11 +32,11 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI
+          # Download latest artifact from CI pipeline
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download latest CI Artifact'
+            displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
@@ -67,17 +64,18 @@ stages:
         deploy:
           steps:
 
-          # Download artifact again for staging
+          # Download artifact again for Staging
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download latest CI Artifact'
+            displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
+          # Deploy to Staging
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
             inputs:
@@ -98,11 +96,11 @@ stages:
         deploy:
           steps:
 
-          # Download artifact again for production
+          # Download artifact again for Production
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download latest CI Artifact'
+            displayName: 'Download Latest CI Artifact'
             inputs:
-              source: 'specificPipeline'
+              source: 'specific'
               project: $(CI_PROJECT)
               pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
