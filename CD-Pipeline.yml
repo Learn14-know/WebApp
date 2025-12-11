@@ -10,6 +10,9 @@ resources:
             - main
 
 variables:
+  # Azure DevOps project
+  PROJECT_NAME: 'WebApp'           # <-- your DevOps project name
+
   # App Names
   APP_DEV: 'app-RG-DEV'
   APP_STG: 'app-RG-STAGING'
@@ -41,8 +44,8 @@ stages:
               displayName: "Download Latest CI Artifact"
               inputs:
                 buildType: 'specific'
-                project: $(resources.pipeline.WebAppCI.project)
-                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
                 runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
@@ -70,8 +73,8 @@ stages:
               displayName: "Download Latest CI Artifact"
               inputs:
                 buildType: 'specific'
-                project: $(resources.pipeline.WebAppCI.project)
-                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
                 runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
@@ -99,8 +102,8 @@ stages:
               displayName: "Download Latest CI Artifact"
               inputs:
                 buildType: 'specific'
-                project: $(resources.pipeline.WebAppCI.project)
-                pipeline: $(resources.pipeline.WebAppCI.pipeline)
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
                 runVersion: 'latest'
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
