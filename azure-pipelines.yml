@@ -21,26 +21,9 @@ resources:
 
 stages:
 
-# --------------------- Download Artifact Once ---------------------
-- stage: Download_Artifact
-  displayName: "Download Artifact (Only Once)"
-  jobs:
-  - job: Download
-    displayName: "Download Build Artifact"
-    steps:
-      - download: CI_Build
-        artifact: $(ARTIFACT_NAME)
-        displayName: "Download Build Artifact"
-
-      # Publish the artifact as a pipeline artifact for next stages
-      - publish: $(Pipeline.Workspace)/$(ARTIFACT_NAME)
-        artifact: $(ARTIFACT_NAME)
-        displayName: "Publish artifact for subsequent stages"
-
 # --------------------- Deploy to Dev ---------------------
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
-  dependsOn: Download_Artifact
   jobs:
   - deployment: DeployDev
     environment: dev
@@ -48,11 +31,12 @@ stages:
       runOnce:
         deploy:
           steps:
-          # Download the artifact from the previous stage
-          - download: current
+          # Download the artifact from CI
+          - download: CI_Build
             artifact: $(ARTIFACT_NAME)
-            displayName: "Download artifact from previous stage"
+            displayName: "Download artifact from CI"
 
+          # Deploy to Dev App Service
           - task: AzureWebApp@1
             displayName: "Deploy to Dev App Service"
             inputs:
@@ -72,10 +56,12 @@ stages:
       runOnce:
         deploy:
           steps:
-          - download: current
+          # Download the artifact from CI
+          - download: CI_Build
             artifact: $(ARTIFACT_NAME)
-            displayName: "Download artifact from previous stage"
+            displayName: "Download artifact from CI"
 
+          # Deploy to GREEN slot
           - task: AzureWebApp@1
             displayName: "Deploy to GREEN slot (Staging)"
             inputs:
@@ -85,6 +71,7 @@ stages:
               slotName: "green"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
+          # Health check on GREEN slot
           - task: PowerShell@2
             displayName: "Health Check on GREEN slot"
             inputs:
@@ -92,14 +79,16 @@ stages:
               script: |
                 $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
                 for ($i=0; $i -lt 12; $i++) {
-                    try { $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                          if ($resp.StatusCode -eq 200) { exit 0 } 
+                    try { 
+                        $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+                        if ($resp.StatusCode -eq 200) { exit 0 } 
                     } catch {}
                     Start-Sleep -Seconds 10
                 }
                 Write-Error "Health check failed after multiple attempts"
                 exit 1
 
+          # Swap GREEN → Production slot
           - task: AzureAppServiceManage@0
             displayName: "Swap GREEN slot into Production"
             inputs:
@@ -120,10 +109,12 @@ stages:
       runOnce:
         deploy:
           steps:
-          - download: current
+          # Download the artifact from CI
+          - download: CI_Build
             artifact: $(ARTIFACT_NAME)
-            displayName: "Download artifact from previous stage"
+            displayName: "Download artifact from CI"
 
+          # Deploy to BLUE slot
           - task: AzureWebApp@1
             displayName: "Deploy to BLUE slot (Production)"
             inputs:
@@ -133,6 +124,7 @@ stages:
               slotName: "blue"
               package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
+          # Health check on BLUE slot
           - task: PowerShell@2
             displayName: "Health Check on BLUE slot"
             inputs:
@@ -140,14 +132,16 @@ stages:
               script: |
                 $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
                 for ($i=0; $i -lt 12; $i++) {
-                    try { $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                          if ($resp.StatusCode -eq 200) { exit 0 } 
+                    try { 
+                        $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+                        if ($resp.StatusCode -eq 200) { exit 0 } 
                     } catch {}
                     Start-Sleep -Seconds 10
                 }
                 Write-Error "Health check failed after multiple attempts"
                 exit 1
 
+          # Swap BLUE → Production slot
           - task: AzureAppServiceManage@0
             displayName: "Swap BLUE slot into LIVE Production"
             inputs:
