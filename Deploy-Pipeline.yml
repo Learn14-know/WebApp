@@ -15,9 +15,9 @@ variables:
   AZURE_SERVICE_CONNECTION: 'Appconnec'
 
   # CI pipeline info
-  CI_PROJECT: 'WebApp'         # DevOps project name
-  CI_PIPELINE_ID: 61           # CI pipeline ID
-  ARTIFACT_NAME: 'drop'        # Artifact name in CI
+  CI_PROJECT: 'WebApp'                     # DevOps project name
+  CI_PIPELINE_NAME: 'Learn14-know.WebApp' # CI pipeline name
+  ARTIFACT_NAME: 'drop'                    # Artifact name in CI
 
 stages:
 
@@ -34,14 +34,20 @@ stages:
 
           # Download latest artifact from CI
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact'
             inputs:
               source: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
+
+          # Debug: List downloaded files
+          - script: |
+              echo "Listing files in downloaded artifact:"
+              ls -R $(Pipeline.Workspace)/drop
+            displayName: 'Debug: List artifact files'
 
           # Deploy to Dev
           - task: AzureWebApp@1
@@ -50,7 +56,7 @@ stages:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               appName: $(APP_DEV)
               resourceGroupName: $(RG_DEV)
-              package: '$(Pipeline.Workspace)/drop/app.zip'
+              package: '$(Pipeline.Workspace)/drop/app.zip'  # adjust if path differs
 
 # ---------------------- STAGING DEPLOY -------------------------
 - stage: Deploy_Staging
@@ -64,18 +70,21 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact'
             inputs:
               source: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
 
-          # Deploy to Staging
+          - script: |
+              echo "Listing files in downloaded artifact:"
+              ls -R $(Pipeline.Workspace)/drop
+            displayName: 'Debug: List artifact files'
+
           - task: AzureWebApp@1
             displayName: 'Deploy to Staging'
             inputs:
@@ -96,16 +105,20 @@ stages:
         deploy:
           steps:
 
-          # Download latest artifact from CI
           - task: DownloadPipelineArtifact@2
-            displayName: 'Download Latest CI Artifact'
+            displayName: 'Download CI Artifact'
             inputs:
               source: 'specific'
               project: $(CI_PROJECT)
-              pipeline: $(CI_PIPELINE_ID)
+              pipeline: $(CI_PIPELINE_NAME)
               buildVersionToDownload: 'latest'
               artifact: $(ARTIFACT_NAME)
               targetPath: '$(Pipeline.Workspace)/drop'
+
+          - script: |
+              echo "Listing files in downloaded artifact:"
+              ls -R $(Pipeline.Workspace)/drop
+            displayName: 'Debug: List artifact files'
 
           # Deploy to Production Slot (Blue)
           - task: AzureWebApp@1
