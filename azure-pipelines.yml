@@ -1,136 +1,65 @@
+trigger:
+- main
 
-# ---------------------- AUTO TRIGGER FROM CI PIPELINE ----------------------
-resources:
-  pipelines:
-  - pipeline: WebAppCI
-    project: WebApp
-    source: Learn14-know.WebApp
-    trigger: true   # Auto-trigger when CI pipeline completes
+pool:
+  vmImage: ubuntu-latest
 
 variables:
-  # App Names
-  APP_DEV: 'app-RG-DEV'
-  APP_STG: 'app-RG-STAGING'
-  APP_PRD: 'app-RG-PROD-App'
-
-  # Resource Groups
-  RG_DEV: 'RG-DEV'
-  RG_STAGING: 'RG-STAGING'
-  RG_PRD: 'RG-PRD-App'
-
-  # Azure service connection
-  AZURE_SERVICE_CONNECTION: 'Appconnec'
-
-  # Artifact
+  DOTNET_VERSION: '8.0.x'
+  BUILD_CONFIGURATION: 'Release'
+  PUBLISH_DIR: '$(Build.ArtifactStagingDirectory)/publish'
   ARTIFACT_NAME: 'drop'
+  WEB_PROJECT: 'src/DotNetWebApp/DotNetWebApp.csproj'
 
-# ---------------------- DEPLOY DEV ----------------------
 stages:
-- stage: Deploy_Dev
-  displayName: "Deploy to Dev"
+
+- stage: Build_Test
+  displayName: "CI — Build and Test"
   jobs:
-    - deployment: DeployDev
-      environment: dev
-      strategy:
-        runOnce:
-          deploy:
-            steps:
+  - job: BuildJob
+    displayName: Build Job
+    steps:
 
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
-              inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK'
+      inputs:
+        packageType: 'sdk'
+        version: '$(DOTNET_VERSION)'
 
-            - task: AzureWebApp@1
-              displayName: "Deploy to Dev"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_DEV)
-                resourceGroupName: $(RG_DEV)
-                package: "$(Pipeline.Workspace)/drop/app.zip"
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet Packages'
+      inputs:
+        command: 'restore'
+        projects: 'DotNetWebApp.sln'
+        feedsToUse: 'select'
+        vstsFeed: '049291ea-8785-42f3-b7c8-c7c84cd3506d'
 
-# ---------------------- DEPLOY STAGING ----------------------
-- stage: Deploy_Staging
-  displayName: "Deploy to Staging"
-  dependsOn: Deploy_Dev
-  jobs:
-    - deployment: DeployStaging
-      environment: staging
-      strategy:
-        runOnce:
-          deploy:
-            steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Solution'
+      inputs:
+        command: 'build'
+        projects: 'DotNetWebApp.sln'
+        arguments: '--configuration $(BUILD_CONFIGURATION)'
 
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
-              inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Unit Tests'
+      inputs:
+        command: 'test'
+        projects: 'tests/DotNetWebApp.Tests/DotNetWebApp.Tests.csproj'
+        arguments: '--logger trx --configuration $(BUILD_CONFIGURATION)'
 
-            - task: AzureWebApp@1
-              displayName: "Deploy to Staging"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_STG)
-                resourceGroupName: $(RG_STAGING)
-                package: "$(Pipeline.Workspace)/drop/app.zip"
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Web Project'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '$(WEB_PROJECT)'
+        arguments: '--configuration $(BUILD_CONFIGURATION) --output $(PUBLISH_DIR)'
+        zipAfterPublish: true
+        zipFileName: 'app.zip'  
 
-# ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
-- stage: Deploy_Prod
-  displayName: "Deploy to Production"
-  dependsOn: Deploy_Staging
-  jobs:
-    - deployment: DeployProd
-      environment: production
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-
-            - task: DownloadPipelineArtifact@2
-              displayName: "Download CI Artifact"
-              inputs:
-                buildType: specific
-                project: WebApp
-                pipeline: Learn14-know.WebApp
-                runVersion: specific
-                runId: $(resources.pipeline.WebAppCI.runID)
-                artifact: $(ARTIFACT_NAME)
-                path: $(Pipeline.Workspace)/drop
-
-            # Deploy to BLUE slot
-            - task: AzureWebApp@1
-              displayName: "Deploy to Blue Slot"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                appName: $(APP_PRD)
-                resourceGroupName: $(RG_PRD)
-                slotName: blue
-                package: "$(Pipeline.Workspace)/drop/app.zip"
-
-            # Slot Swap (BLUE → Production) using CLI
-            - task: AzureCLI@2
-              displayName: "Swap Blue Slot to Production"
-              inputs:
-                azureSubscription: $(AZURE_SERVICE_CONNECTION)
-                scriptType: bash
-                scriptLocation: inlineScript
-                inlineScript: |
-                  echo "Swapping blue slot into production..."
-                  az webapp deployment slot swap \
-                    --name $(APP_PRD) \
-                    --resource-group $(RG_PRD) \
-                    --slot blue \
-                    --target-slot production
-                  echo "Swap completed successfully."
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifact'
+      inputs:
+        targetPath: '$(PUBLISH_DIR)'
+        artifact: '$(ARTIFACT_NAME)'
