@@ -38,7 +38,11 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: current
+                buildType: specific
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                runVersion: specific
+                runId: $(resources.pipeline.WebAppCI.runID)
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -65,7 +69,11 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: current
+                buildType: specific
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                runVersion: specific
+                runId: $(resources.pipeline.WebAppCI.runID)
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -92,7 +100,11 @@ stages:
             - task: DownloadPipelineArtifact@2
               displayName: "Download CI Artifact"
               inputs:
-                buildType: current
+                buildType: specific
+                project: WebApp
+                pipeline: Learn14-know.WebApp
+                runVersion: specific
+                runId: $(resources.pipeline.WebAppCI.runID)
                 artifact: $(ARTIFACT_NAME)
                 path: $(Pipeline.Workspace)/drop
 
@@ -114,11 +126,10 @@ stages:
                 scriptType: bash
                 scriptLocation: inlineScript
                 inlineScript: |
-                  echo "Starting blue → production slot swap..."
+                  echo "Swapping blue slot into production..."
                   az webapp deployment slot swap \
                     --name $(APP_PRD) \
                     --resource-group $(RG_PRD) \
                     --slot blue \
                     --target-slot production
-
                   echo "Swap completed successfully."
