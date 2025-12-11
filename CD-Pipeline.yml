@@ -56,7 +56,7 @@ stages:
                 azureSubscription: $(AZURE_SERVICE_CONNECTION)
                 appName: $(APP_DEV)
                 resourceGroupName: $(RG_DEV)
-                package: "$(Pipeline.Workspace)/drop/app.zip"
+                package: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
 
 # ---------------------- DEPLOY STAGING ----------------------
 - stage: Deploy_Staging
