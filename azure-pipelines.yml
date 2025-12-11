@@ -1,4 +1,5 @@
 trigger: none
+
 pool:
   vmImage: ubuntu-latest
 
@@ -16,30 +17,34 @@ variables:
 resources:
   pipelines:
     - pipeline: CI_Build
-      source:  Learn14-know.WebApp # replace with your CI pipeline name
+      source: Learn14-know.WebApp
       trigger: true
 
-stages:
+# ---------------------------------------------------------------------
+# 1. DOWNLOAD ARTIFACT ONCE
+# ---------------------------------------------------------------------
 
-# --------------------- Download Artifact Once ---------------------
+stages:
 - stage: Download_Artifact
   displayName: "Download Artifact (Only Once)"
   jobs:
     - job: Download
       displayName: "Download Build Artifact"
       steps:
-        # Download artifact from CI pipeline
+
         - download: CI_Build
           artifact: $(ARTIFACT_NAME)
           displayName: "Download Build Artifact"
 
-        # Debug: list files to verify artifact location
         - script: |
             echo "Listing downloaded artifact files:"
-            ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
+            ls -R "$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
           displayName: "Debug - List Artifact Files"
 
-# --------------------- Deploy to Dev ---------------------
+# ---------------------------------------------------------------------
+# 2. DEPLOY TO DEV
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   dependsOn: Download_Artifact
@@ -50,9 +55,9 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
 
               - task: AzureWebApp@1
                 displayName: "Deploy to Dev App Service"
@@ -62,7 +67,10 @@ stages:
                   resourceGroupName: $(RG_DEV)
                   package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-# --------------------- Deploy to Staging (Green slot) ---------------------
+# ---------------------------------------------------------------------
+# 3. DEPLOY TO STAGING (GREEN SLOT)
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Staging
   displayName: "Deploy to Staging (Blue/Green)"
   dependsOn: Deploy_Dev
@@ -73,9 +81,9 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
 
               - task: AzureWebApp@1
                 displayName: "Deploy to GREEN slot (Staging)"
@@ -89,17 +97,23 @@ stages:
               - task: PowerShell@2
                 displayName: "Health Check on GREEN slot"
                 inputs:
-                  targetType: 'inline'
+                  targetType: inline
                   script: |
                     $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
-                    for ($i=0; $i -lt 12; $i++) {
-                        try {
-                            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                            if ($resp.StatusCode -eq 200) { exit 0 }
-                        } catch {}
-                        Start-Sleep -Seconds 10
+                    Write-Host "Checking health: $url"
+                    for ($i = 1; $i -le 12; $i++) {
+                      try {
+                        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
+                        if ($response.StatusCode -eq 200) {
+                          Write-Host "Health check PASSED"
+                          exit 0
+                        }
+                      } catch {
+                        Write-Host "Attempt $i failed..."
+                      }
+                      Start-Sleep -Seconds 10
                     }
-                    Write-Error "Health check failed after multiple attempts"
+                    Write-Error "Health check FAILED"
                     exit 1
 
               - task: AzureAppServiceManage@0
@@ -111,7 +125,10 @@ stages:
                   SourceSlot: green
                   TargetSlot: production
 
-# --------------------- Deploy to Production (Blue slot) ---------------------
+# ---------------------------------------------------------------------
+# 4. DEPLOY TO PRODUCTION (BLUE SLOT)
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Prod
   displayName: "Deploy to Production (Blue/Green)"
   dependsOn: Deploy_Staging
@@ -122,9 +139,9 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
 
               - task: AzureWebApp@1
                 displayName: "Deploy to BLUE slot (Production)"
@@ -138,17 +155,23 @@ stages:
               - task: PowerShell@2
                 displayName: "Health Check on BLUE slot"
                 inputs:
-                  targetType: 'inline'
+                  targetType: inline
                   script: |
                     $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
-                    for ($i=0; $i -lt 12; $i++) {
-                        try {
-                            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                            if ($resp.StatusCode -eq 200) { exit 0 }
-                        } catch {}
-                        Start-Sleep -Seconds 10
+                    Write-Host "Checking health: $url"
+                    for ($i = 1; $i -le 12; $i++) {
+                      try {
+                        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
+                        if ($response.StatusCode -eq 200) {
+                          Write-Host "Health check PASSED"
+                          exit 0
+                        }
+                      } catch {
+                        Write-Host "Attempt $i failed..."
+                      }
+                      Start-Sleep -Seconds 10
                     }
-                    Write-Error "Health check failed after multiple attempts"
+                    Write-Error "Health check FAILED"
                     exit 1
 
               - task: AzureAppServiceManage@0
