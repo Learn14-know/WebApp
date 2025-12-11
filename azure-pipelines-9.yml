@@ -26,7 +26,7 @@ stages:
       inputs:
         buildType: 'specific'
         project: 'WebApp'
-        definition: '585'
+        definition: '68'
         buildVersionToDownload: 'latest'
         artifactName: '$(ARTIFACT_NAME)'
         targetPath: '$(Pipeline.Workspace)/drop'
