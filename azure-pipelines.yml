@@ -1,4 +1,5 @@
 trigger: none
+
 pool:
   vmImage: ubuntu-latest
 
@@ -16,30 +17,58 @@ variables:
 resources:
   pipelines:
     - pipeline: CI_Build
-      source: Learn14-know.WebApp # Replace with your CI pipeline name
+      source: Learn14-know.WebApp
       trigger: true
 
-stages:
+# ---------------------------------------------------------------------
+# 1. DOWNLOAD ARTIFACT + FULL DEBUG
+# ---------------------------------------------------------------------
 
-# --------------------- Download Artifact ---------------------
+stages:
 - stage: Download_Artifact
-  displayName: "Download Artifact (Only Once)"
+  displayName: "Download Artifact + DEBUG"
   jobs:
     - job: Download
       displayName: "Download Build Artifact"
       steps:
+
         - download: CI_Build
           artifact: $(ARTIFACT_NAME)
-          displayName: "Download Build Artifact"
+          displayName: "Download CI Artifact"
 
-        # Debug: verify artifact location
+        # 🔥 FULL DEBUG: Show workspace + artifact structure
         - script: |
-            echo "Pipeline.Workspace: $(Pipeline.Workspace)"
-            echo "Listing all files in artifact folder:"
-            ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
-          displayName: "Debug - List Artifact Files"
+            echo "====================== DEBUG START ======================"
+            echo "Pipeline.Workspace:"
+            echo "$(Pipeline.Workspace)"
+            echo ""
 
-# --------------------- Deploy to Dev ---------------------
+            echo "Listing Workspace root:"
+            ls -al "$(Pipeline.Workspace)"
+            echo ""
+
+            echo "Recursive workspace listing:"
+            ls -R "$(Pipeline.Workspace)"
+            echo ""
+
+            echo "Expected artifact folder:"
+            echo "$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
+            echo ""
+
+            if [ -d "$(Pipeline.Workspace)/$(ARTIFACT_NAME)" ]; then
+              echo "Artifact directory exists"
+              ls -al "$(Pipeline.Workspace)/$(ARTIFACT_NAME)"
+            else
+              echo "❌ Artifact directory NOT FOUND at: $(Pipeline.Workspace)/$(ARTIFACT_NAME)"
+            fi
+
+            echo "====================== DEBUG END ======================"
+          displayName: "DEBUG — Locate Artifact"
+
+# ---------------------------------------------------------------------
+# 2. DEPLOY TO DEV
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   dependsOn: Download_Artifact
@@ -50,16 +79,9 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
-
-              # Debug: verify artifact in deploy stage
-              - script: |
-                  echo "Pipeline.Workspace: $(Pipeline.Workspace)"
-                  echo "Listing all files in downloaded artifact for Dev:"
-                  ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
-                displayName: "Debug - List Artifact Files in Dev"
 
               - task: AzureWebApp@1
                 displayName: "Deploy to Dev App Service"
@@ -67,12 +89,14 @@ stages:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   appName: $(APP_DEV)
                   resourceGroupName: $(RG_DEV)
-                  # Adjusted path to app.zip inside artifact folder
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
-# --------------------- Deploy to Staging (Green slot) ---------------------
+# ---------------------------------------------------------------------
+# 3. DEPLOY TO STAGING (GREEN SLOT)
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Staging
-  displayName: "Deploy to Staging (Blue/Green)"
+  displayName: "Deploy to Staging"
   dependsOn: Deploy_Dev
   jobs:
     - deployment: DeployStg
@@ -81,44 +105,38 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
-
-              # Debug: verify artifact in staging
-              - script: |
-                  echo "Pipeline.Workspace: $(Pipeline.Workspace)"
-                  echo "Listing all files in downloaded artifact for Staging:"
-                  ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
-                displayName: "Debug - List Artifact Files in Staging"
 
               - task: AzureWebApp@1
-                displayName: "Deploy to GREEN slot (Staging)"
+                displayName: "Deploy to GREEN slot"
                 inputs:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   appName: $(APP_STG)
                   resourceGroupName: $(RG_STAGING)
                   slotName: "green"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
               - task: PowerShell@2
-                displayName: "Health Check on GREEN slot"
+                displayName: "Health Check GREEN"
                 inputs:
                   targetType: 'inline'
                   script: |
                     $url = "https://$(APP_STG)-green.azurewebsites.net$(HEALTHCHECK_URL)"
-                    for ($i=0; $i -lt 12; $i++) {
-                        try {
-                            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                            if ($resp.StatusCode -eq 200) { exit 0 }
-                        } catch {}
-                        Start-Sleep -Seconds 10
+                    Write-Host "Checking health: $url"
+                    for ($i=1; $i -le 12; $i++) {
+                      try {
+                        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
+                        if ($r.StatusCode -eq 200) { exit 0 }
+                      } catch {}
+                      Start-Sleep 10
                     }
-                    Write-Error "Health check failed after multiple attempts"
+                    Write-Error "Health check failed"
                     exit 1
 
               - task: AzureAppServiceManage@0
-                displayName: "Swap GREEN slot into Production"
+                displayName: "Swap GREEN → Prod"
                 inputs:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   WebAppName: $(APP_STG)
@@ -126,9 +144,12 @@ stages:
                   SourceSlot: green
                   TargetSlot: production
 
-# --------------------- Deploy to Production (Blue slot) ---------------------
+# ---------------------------------------------------------------------
+# 4. DEPLOY TO PRODUCTION (BLUE SLOT)
+# ---------------------------------------------------------------------
+
 - stage: Deploy_Prod
-  displayName: "Deploy to Production (Blue/Green)"
+  displayName: "Deploy to Production"
   dependsOn: Deploy_Staging
   jobs:
     - deployment: DeployProd
@@ -137,44 +158,38 @@ stages:
         runOnce:
           deploy:
             steps:
+
               - download: current
                 artifact: $(ARTIFACT_NAME)
-                displayName: "Download artifact from previous stage"
-
-              # Debug: verify artifact in production
-              - script: |
-                  echo "Pipeline.Workspace: $(Pipeline.Workspace)"
-                  echo "Listing all files in downloaded artifact for Production:"
-                  ls -R $(Pipeline.Workspace)/$(ARTIFACT_NAME)
-                displayName: "Debug - List Artifact Files in Production"
 
               - task: AzureWebApp@1
-                displayName: "Deploy to BLUE slot (Production)"
+                displayName: "Deploy to BLUE slot"
                 inputs:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   appName: $(APP_PRD)
                   resourceGroupName: $(RG_PROD)
                   slotName: "blue"
-                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/DotNetWebApp/app.zip"
+                  package: "$(Pipeline.Workspace)/$(ARTIFACT_NAME)/app.zip"
 
               - task: PowerShell@2
-                displayName: "Health Check on BLUE slot"
+                displayName: "Health Check BLUE"
                 inputs:
                   targetType: 'inline'
                   script: |
                     $url = "https://$(APP_PRD)-blue.azurewebsites.net$(HEALTHCHECK_URL)"
-                    for ($i=0; $i -lt 12; $i++) {
-                        try {
-                            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
-                            if ($resp.StatusCode -eq 200) { exit 0 }
-                        } catch {}
-                        Start-Sleep -Seconds 10
+                    Write-Host "Checking health: $url"
+                    for ($i=1; $i -le 12; $i++) {
+                      try {
+                        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -SkipCertificateCheck
+                        if ($r.StatusCode -eq 200) { exit 0 }
+                      } catch {}
+                      Start-Sleep 10
                     }
-                    Write-Error "Health check failed after multiple attempts"
+                    Write-Error "Health check failed"
                     exit 1
 
               - task: AzureAppServiceManage@0
-                displayName: "Swap BLUE slot into LIVE Production"
+                displayName: "Swap BLUE → LIVE"
                 inputs:
                   azureSubscription: $(AZURE_SERVICE_CONNECTION)
                   WebAppName: $(APP_PRD)
