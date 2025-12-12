@@ -39,7 +39,7 @@ stages:
         deploy:
           steps:
           - task: DownloadPipelineArtifact@2
-            displayName: "Download Latest CI Artifact"
+            displayName: "Download Artifact"
             inputs:
               buildType: 'specific'
               project: $(PROJECT_NAME)
@@ -49,7 +49,7 @@ stages:
               path: $(Pipeline.Workspace)/drop
 
           - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Dev (Linux)"
+            displayName: "Deploy to Dev"
             inputs:
               ConnectionType: 'AzureRM'
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
