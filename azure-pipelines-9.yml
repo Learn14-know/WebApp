@@ -117,7 +117,8 @@ stages:
                 echo "ERROR: Green slot did not become healthy."
                 exit 1
 
-# ---------------------- DEPLOY PRODUCTION (BLUE/GREEN) ----------------------
+
+
 - stage: Deploy_Prod
   displayName: "Deploy to Production"
   dependsOn: Deploy_Staging
@@ -139,7 +140,7 @@ stages:
               path: $(Pipeline.Workspace)/drop
 
           - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Blue Slot - Production"
+            displayName: "Deploy to Blue Slot - Production (with Swap)"
             inputs:
               ConnectionType: 'AzureRM'
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
@@ -150,40 +151,26 @@ stages:
               packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
+              SwapWithProduction: true   # <-- Native Blue → Production slot swap
 
           - task: AzureCLI@2
-            displayName: "Health Check - Blue Slot"
+            displayName: "Health Check - Production After Swap"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                SLOT_URL="https://$(APP_PRD)-blue.azurewebsites.net/health"
-                echo "Waiting for blue slot to be healthy..."
+                PROD_URL="https://$(APP_PRD).azurewebsites.net/health"
+                echo "Waiting for production (after swap) to be healthy..."
                 for i in {1..30}; do
-                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SLOT_URL || echo 000)
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" $PROD_URL || echo 000)
                   if [ "$STATUS" -eq 200 ]; then
-                    echo "Blue slot is healthy!"
+                    echo "Production is healthy!"
                     exit 0
                   else
                     echo "Health check failed (status=$STATUS). Retry in 10s..."
                     sleep 10
                   fi
                 done
-                echo "ERROR: Blue slot did not become healthy."
+                echo "ERROR: Production did not become healthy after swap."
                 exit 1
-
-          - task: AzureCLI@2
-            displayName: "Swap Blue Slot to Production"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "Starting blue → production slot swap..."
-                az webapp deployment slot swap \
-                  --name $(APP_PRD) \
-                  --resource-group $(RG_PRD) \
-                  --slot blue \
-                  --target-slot production
-                echo "Swap completed successfully."
