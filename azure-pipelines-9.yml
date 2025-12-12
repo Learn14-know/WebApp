@@ -1,4 +1,4 @@
-# ---------------------- CD PIPELINE ----------------------
+
 
 resources:
   pipelines:
@@ -28,7 +28,6 @@ variables:
   # Artifact
   ARTIFACT_NAME: 'drop'
 
-# ---------------------- DEPLOY DEV ----------------------
 stages:
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
@@ -61,7 +60,7 @@ stages:
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
 
-# ---------------------- DEPLOY STAGING ----------------------
+
 - stage: Deploy_Staging
   displayName: "Deploy to Staging"
   dependsOn: Deploy_Dev
@@ -151,7 +150,7 @@ stages:
               packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
-              SwapWithProduction: true   # <-- Native Blue → Production slot swap
+              SwapWithProduction: true   
 
           - task: AzureCLI@2
             displayName: "Health Check - Production After Swap"
