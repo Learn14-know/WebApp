@@ -1,5 +1,4 @@
 
-
 resources:
   pipelines:
     - pipeline: WebAppCI
@@ -115,6 +114,15 @@ stages:
                 done
                 echo "ERROR: Green slot did not become healthy."
                 exit 1
+
+                - task: AzureAppServiceManage@0
+                    inputs:
+                    azureSubscription: 'Appconnec'
+                    Action: 'Swap Slots'
+                    WebAppName: 'app-staging-app'
+                    ResourceGroupName: 'RG-STAGING'
+                    SourceSlot: 'green'
+
 
 
 
