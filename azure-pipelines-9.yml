@@ -88,7 +88,7 @@ stages:
               appType: 'webAppLinux'
               WebAppName: $(APP_STG)
               ResourceGroupName: $(RG_STAGING)
-              SlotName: 'green'
+              SlotName: 'app-staging-app-green'
               packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
