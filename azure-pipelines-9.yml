@@ -93,6 +93,7 @@ stages:
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
 
+          
           - task: AzurePowerShell@5
             displayName: "Health Check – Green Slot (Staging)"
             inputs:
@@ -101,26 +102,42 @@ stages:
               Inline: |
                 $slotUrl = "https://$(APP_STG)-green.azurewebsites.net/health"
 
-                Write-Host "Waiting for Green slot to be healthy..."
-                for ($i = 1; $i -le 30; $i++) {
+                Write-Host "Starting health check for slot:"
+                Write-Host $slotUrl
+                Write-Host "--------------------------------"
+
+                $maxRetries = 30
+                $delaySeconds = 10
+
+                for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
                   try {
-                    $response = Invoke-WebRequest -Uri $slotUrl -UseBasicParsing -TimeoutSec 10
-                    if ($response.StatusCode -eq 200) {
-                      Write-Host "Green slot is healthy"
+                    $response = Invoke-WebRequest `
+                      -Uri $slotUrl `
+                      -Method GET `
+                      -TimeoutSec 10 `
+                      -SkipHttpErrorCheck
+
+                    $statusCode = $response.StatusCode
+                    Write-Host "Attempt $attempt → HTTP $statusCode"
+
+                    if ($statusCode -eq 200) {
+                      Write-Host " Green slot is healthy"
                       exit 0
                     }
-                    Write-Host "Status=$($response.StatusCode) retrying..."
                   }
                   catch {
-                    Write-Host "Health check failed, retrying..."
+                    Write-Host "Attempt $attempt → Exception:"
+                    Write-Host $_.Exception.Message
                   }
-                  Start-Sleep -Seconds 10
+
+                  Start-Sleep -Seconds $delaySeconds
                 }
 
-                Write-Error "Green slot did not become healthy"
+                Write-Error " Green slot did not become healthy"
                 exit 1
               azurePowerShellVersion: LatestVersion
 
+         
           - task: AzureAppServiceManage@0
             displayName: "Swap Green → Production (Staging)"
             inputs:
@@ -129,10 +146,6 @@ stages:
               WebAppName: $(APP_STG)
               ResourceGroupName: $(RG_STAGING)
               SourceSlot: 'green'
-
-
-
-
 
 
 - stage: Deploy_Prod
