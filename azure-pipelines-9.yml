@@ -155,8 +155,9 @@ stages:
               artifact: $(ARTIFACT_NAME)
               path: $(Pipeline.Workspace)/drop
 
+          # 1️⃣ Deploy to BLUE slot
           - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Blue Slot - Production (with Swap)"
+            displayName: "Deploy to Blue Slot (Production)"
             inputs:
               ConnectionType: 'AzureRM'
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
@@ -167,33 +168,42 @@ stages:
               packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
               RuntimeStack: 'DOTNETCORE|8.0'
               DeploymentTypeLinux: 'oneDeploy'
-              SwapWithProduction: true   
 
-          - task: AzureCLI@2
-            displayName: "Health Check - Production After Swap"
+          # 2️⃣ Health check BLUE slot
+          - task: AzurePowerShell@5
+            displayName: "Health Check – Blue Slot (Production)"
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                PROD_URL="https://$(APP_PRD).azurewebsites.net/health"
-                echo "Waiting for production (after swap) to be healthy..."
-                for i in {1..30}; do
-                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" $PROD_URL || echo 000)
-                  if [ "$STATUS" -eq 200 ]; then
-                    echo "Production is healthy!"
-                    exit 0
-                  else
-                    echo "Health check failed (status=$STATUS). Retry in 10s..."
-                    sleep 10
-                  fi
-                done
-                echo "ERROR: Production did not become healthy after swap."
+              ScriptType: InlineScript
+              Inline: |
+                $slotUrl = "https://$(APP_PRD)-blue.azurewebsites.net/health"
+
+                Write-Host "Waiting for Blue slot to be healthy..."
+                for ($i = 1; $i -le 30; $i++) {
+                  try {
+                    $response = Invoke-WebRequest -Uri $slotUrl -UseBasicParsing -TimeoutSec 10
+                    if ($response.StatusCode -eq 200) {
+                      Write-Host "Blue slot is healthy"
+                      exit 0
+                    }
+                    Write-Host "Status=$($response.StatusCode) retrying..."
+                  }
+                  catch {
+                    Write-Host "Health check failed, retrying..."
+                  }
+                  Start-Sleep -Seconds 10
+                }
+
+                Write-Error "Blue slot did not become healthy"
                 exit 1
+              azurePowerShellVersion: LatestVersion
+
+          # 3️⃣ Swap BLUE → Production
           - task: AzureAppServiceManage@0
+            displayName: "Swap Blue → Production"
             inputs:
-              azureSubscription: 'Appconnec'
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
               Action: 'Swap Slots'
-              WebAppName: 'app-prod-app'
-              ResourceGroupName: 'RG-PROD-App'
+              WebAppName: $(APP_PRD)
+              ResourceGroupName: $(RG_PRD)
               SourceSlot: 'blue'
