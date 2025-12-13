@@ -105,7 +105,7 @@ stages:
                 azureSubscription: $(AZURE_SERVICE_CONNECTION)
                 ScriptType: InlineScript
                 Inline: |
-                  $slotUrl = "https://$(APP_STG)-green.azurewebsites.net/health"
+                  $slotUrl = "https://https://app-staging-app-green.azurewebsites.net/health"
                   Write-Host "Checking Green slot health: $slotUrl"
 
                   $maxRetries = 30
@@ -181,7 +181,7 @@ stages:
                 azureSubscription: $(AZURE_SERVICE_CONNECTION)
                 ScriptType: InlineScript
                 Inline: |
-                  $slotUrl = "https://$(APP_PRD)-blue.azurewebsites.net/health"
+                  $slotUrl = "https://app-prod-app-blue.azurewebsites.net/health"
                   Write-Host "Checking Blue slot health: $slotUrl"
 
                   $maxRetries = 30
