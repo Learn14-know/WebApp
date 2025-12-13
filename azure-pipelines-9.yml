@@ -31,33 +31,36 @@ stages:
 - stage: Deploy_Dev
   displayName: "Deploy to Dev"
   jobs:
-  - deployment: DeployDev
-    environment: dev
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download Artifact"
-            inputs:
-              buildType: 'specific'
-              project: $(PROJECT_NAME)
-              pipeline: 'Learn14-know.WebApp'
-              runVersion: 'latest'
-              artifact: $(ARTIFACT_NAME)
-              path: $(Pipeline.Workspace)/drop
+    - deployment: DeployDev
+      environment: dev
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - task: DownloadPipelineArtifact@2
+                displayName: "Download Artifact"
+                inputs:
+                  buildType: 'specific'
+                  project: $(PROJECT_NAME)
+                  pipeline: 'Learn14-know.WebApp'
+                  runVersion: 'latest'
+                  artifact: $(ARTIFACT_NAME)
+                  path: $(Pipeline.Workspace)/drop
 
-          - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Dev"
-            inputs:
-              ConnectionType: 'AzureRM'
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appType: 'webAppLinux'
-              WebAppName: $(APP_DEV)
-              ResourceGroupName: $(RG_DEV)
-              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
-              RuntimeStack: 'DOTNETCORE|8.0'
-              DeploymentTypeLinux: 'oneDeploy'
+              - task: AzureRmWebAppDeployment@5
+                displayName: "Deploy to Dev"
+                inputs:
+                  ConnectionType: 'AzureRM'
+                  azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                  appType: 'webAppLinux'
+                  WebAppName: $(APP_DEV)
+                  ResourceGroupName: $(RG_DEV)
+                  packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+                  RuntimeStack: 'DOTNETCORE|8.0'
+                  DeploymentTypeLinux: 'oneDeploy'
+                  StartupCommand: 'dotnet DotNetWebApp.dll'
+
+
 
 
 - stage: Deploy_Staging
@@ -70,84 +73,71 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download Latest CI Artifact"
-            inputs:
-              buildType: 'specific'
-              project: $(PROJECT_NAME)
-              pipeline: 'Learn14-know.WebApp'
-              runVersion: 'latest'
-              artifact: $(ARTIFACT_NAME)
-              path: $(Pipeline.Workspace)/drop
+            - task: DownloadPipelineArtifact@2
+              displayName: "Download Latest CI Artifact"
+              inputs:
+                buildType: 'specific'
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
+                runVersion: 'latest'
+                artifact: $(ARTIFACT_NAME)
+                path: $(Pipeline.Workspace)/drop
 
-          - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Green Slot (Staging)"
-            inputs:
-              ConnectionType: 'AzureRM'
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appType: 'webAppLinux'
-              WebAppName: $(APP_STG)
-              ResourceGroupName: $(RG_STAGING)
-              SlotName: 'app-staging-app-green'
-              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
-              RuntimeStack: 'DOTNETCORE|8.0'
-              DeploymentTypeLinux: 'oneDeploy'
-              StartupCommand: 'dotnet DotNetWebApp.dll'
+            # Deploy to green slot
+            - task: AzureRmWebAppDeployment@5
+              displayName: "Deploy to Green Slot (Staging)"
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                appType: 'webAppLinux'
+                WebAppName: $(APP_STG)
+                ResourceGroupName: $(RG_STAGING)
+                SlotName: 'green'
+                packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+                RuntimeStack: 'DOTNETCORE|8.0'
+                DeploymentTypeLinux: 'oneDeploy'
+                StartupCommand: 'dotnet DotNetWebApp.dll'
 
-          
-          - task: AzurePowerShell@5
-            displayName: "Health Check – Green Slot (Staging)"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              ScriptType: InlineScript
-              Inline: |
-                $slotUrl = "https://$(APP_STG)-green.azurewebsites.net/health"
+           
+            - task: AzurePowerShell@5
+              displayName: "Health Check – Green Slot (Staging)"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                ScriptType: InlineScript
+                Inline: |
+                  $slotUrl = "https://$(APP_STG)-green.azurewebsites.net/health"
+                  Write-Host "Checking Green slot health: $slotUrl"
 
-                Write-Host "Starting health check for slot:"
-                Write-Host $slotUrl
-                Write-Host "--------------------------------"
+                  $maxRetries = 30
+                  $delaySeconds = 10
 
-                $maxRetries = 30
-                $delaySeconds = 10
-
-                for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-                  try {
-                    $response = Invoke-WebRequest `
-                      -Uri $slotUrl `
-                      -Method GET `
-                      -TimeoutSec 10 `
-                      -SkipHttpErrorCheck
-
-                    $statusCode = $response.StatusCode
-                    Write-Host "Attempt $attempt → HTTP $statusCode"
-
-                    if ($statusCode -eq 200) {
-                      Write-Host " Green slot is healthy"
-                      exit 0
-                    }
-                  }
-                  catch {
-                    Write-Host "Attempt $attempt → Exception:"
-                    Write-Host $_.Exception.Message
+                  for ($i = 1; $i -le $maxRetries; $i++) {
+                      try {
+                          $response = Invoke-WebRequest -Uri $slotUrl -TimeoutSec 10 -UseBasicParsing
+                          if ($response.StatusCode -eq 200) {
+                              Write-Host " Green slot is healthy"
+                              exit 0
+                          }
+                          Write-Host "Attempt $i → Status=$($response.StatusCode), retrying..."
+                      } catch {
+                          Write-Host "Attempt $i → Health check failed, retrying..."
+                      }
+                      Start-Sleep -Seconds $delaySeconds
                   }
 
-                  Start-Sleep -Seconds $delaySeconds
-                }
+                  Write-Error " Green slot did not become healthy after $maxRetries attempts"
+                  exit 1
+                azurePowerShellVersion: LatestVersion
 
-                Write-Error " Green slot did not become healthy"
-                exit 1
-              azurePowerShellVersion: LatestVersion
-
-         
-          - task: AzureAppServiceManage@0
-            displayName: "Swap Green → Production (Staging)"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              Action: 'Swap Slots'
-              WebAppName: $(APP_STG)
-              ResourceGroupName: $(RG_STAGING)
-              SourceSlot: 'green'
-
+            
+            - task: AzureAppServiceManage@0
+              displayName: "Swap Green → Production (Staging)"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                Action: 'Swap Slots'
+                WebAppName: $(APP_STG)
+                ResourceGroupName: $(RG_STAGING)
+                SourceSlot: 'green'
 
 - stage: Deploy_Prod
   displayName: "Deploy to Production"
@@ -159,66 +149,67 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download Latest CI Artifact"
-            inputs:
-              buildType: 'specific'
-              project: $(PROJECT_NAME)
-              pipeline: 'Learn14-know.WebApp'
-              runVersion: 'latest'
-              artifact: $(ARTIFACT_NAME)
-              path: $(Pipeline.Workspace)/drop
+            - task: DownloadPipelineArtifact@2
+              displayName: "Download Latest CI Artifact"
+              inputs:
+                buildType: 'specific'
+                project: $(PROJECT_NAME)
+                pipeline: 'Learn14-know.WebApp'
+                runVersion: 'latest'
+                artifact: $(ARTIFACT_NAME)
+                path: $(Pipeline.Workspace)/drop
 
-          # 1️⃣ Deploy to BLUE slot
-          - task: AzureRmWebAppDeployment@5
-            displayName: "Deploy to Blue Slot (Production)"
-            inputs:
-              ConnectionType: 'AzureRM'
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              appType: 'webAppLinux'
-              WebAppName: $(APP_PRD)
-              ResourceGroupName: $(RG_PRD)
-              SlotName: 'blue'
-              packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
-              RuntimeStack: 'DOTNETCORE|8.0'
-              DeploymentTypeLinux: 'oneDeploy'
-              StartupCommand: 'dotnet DotNetWebApp.dll'
+            
+            - task: AzureRmWebAppDeployment@5
+              displayName: "Deploy to Blue Slot (Production)"
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                appType: 'webAppLinux'
+                WebAppName: $(APP_PRD)
+                ResourceGroupName: $(RG_PRD)
+                SlotName: 'blue'
+                packageForLinux: "$(Pipeline.Workspace)/drop/DotNetWebApp.zip"
+                RuntimeStack: 'DOTNETCORE|8.0'
+                DeploymentTypeLinux: 'oneDeploy'
+                StartupCommand: 'dotnet DotNetWebApp.dll'
 
-          # 2️⃣ Health check BLUE slot
-          - task: AzurePowerShell@5
-            displayName: "Health Check – Blue Slot (Production)"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              ScriptType: InlineScript
-              Inline: |
-                $slotUrl = "https://$(APP_PRD)-blue.azurewebsites.net/health"
+            
+            - task: AzurePowerShell@5
+              displayName: "Health Check – Blue Slot (Production)"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                ScriptType: InlineScript
+                Inline: |
+                  $slotUrl = "https://$(APP_PRD)-blue.azurewebsites.net/health"
+                  Write-Host "Checking Blue slot health: $slotUrl"
 
-                Write-Host "Waiting for Blue slot to be healthy..."
-                for ($i = 1; $i -le 30; $i++) {
-                  try {
-                    $response = Invoke-WebRequest -Uri $slotUrl -UseBasicParsing -TimeoutSec 10
-                    if ($response.StatusCode -eq 200) {
-                      Write-Host "Blue slot is healthy"
-                      exit 0
-                    }
-                    Write-Host "Status=$($response.StatusCode) retrying..."
+                  $maxRetries = 30
+                  $delaySeconds = 10
+
+                  for ($i = 1; $i -le $maxRetries; $i++) {
+                      try {
+                          $response = Invoke-WebRequest -Uri $slotUrl -TimeoutSec 10 -UseBasicParsing
+                          if ($response.StatusCode -eq 200) {
+                              Write-Host "Blue slot is healthy"
+                              exit 0
+                          }
+                          Write-Host "Attempt $i → Status=$($response.StatusCode), retrying..."
+                      } catch {
+                          Write-Host "Attempt $i → Health check failed, retrying..."
+                      }
+                      Start-Sleep -Seconds $delaySeconds
                   }
-                  catch {
-                    Write-Host "Health check failed, retrying..."
-                  }
-                  Start-Sleep -Seconds 10
-                }
 
-                Write-Error "Blue slot did not become healthy"
-                exit 1
-              azurePowerShellVersion: LatestVersion
+                  Write-Error "Blue slot did not become healthy after $maxRetries attempts"
+                  exit 1
+                azurePowerShellVersion: LatestVersion
 
-          # 3️⃣ Swap BLUE → Production
-          - task: AzureAppServiceManage@0
-            displayName: "Swap Blue → Production"
-            inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
-              Action: 'Swap Slots'
-              WebAppName: $(APP_PRD)
-              ResourceGroupName: $(RG_PRD)
-              SourceSlot: 'blue'
+            - task: AzureAppServiceManage@0
+              displayName: "Swap Blue → Production"
+              inputs:
+                azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                Action: 'Swap Slots'
+                WebAppName: $(APP_PRD)
+                ResourceGroupName: $(RG_PRD)
+                SourceSlot: 'blue'
