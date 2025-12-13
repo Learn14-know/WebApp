@@ -183,3 +183,10 @@ stages:
                 done
                 echo "ERROR: Production did not become healthy after swap."
                 exit 1
+          - task: AzureAppServiceManage@0
+            inputs:
+              azureSubscription: 'Appconnec'
+              Action: 'Swap Slots'
+              WebAppName: 'app-prod-app'
+              ResourceGroupName: 'RG-PROD-App'
+              SourceSlot: 'blue'
